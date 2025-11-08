@@ -153,11 +153,10 @@ Else, return an error.
 	ppinfo ppi;
 	int parseFlag = parsePath(filename, &ppi);
 
+//*DEBUG this block is executing and returning -1 to cmd_cat.
 	// Check that the file exists and is not a directory.
-	if (((ppi.parent[ppi.lei].isDirectory == 1) &&
-		 ppi.parent[0].LBAlocation != vcb->root_directory_block) ||
-		(parseFlag == -1 && !(flags & O_CREAT)) ||
-		(ppi.parent[ppi.lei].isDirectory == 1))
+	if ((ppi.parent[ppi.lei].isDirectory == 1) ||
+	(parseFlag == -1 && !(ppi.isFile))) 
 	{
 		printf("parseFlag: %d\n", parseFlag);
 		printf("ppi.parent[ppi.lei].LBAlocation:%ld\n", ppi.parent[ppi.lei].LBAlocation);
