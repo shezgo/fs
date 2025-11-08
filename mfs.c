@@ -245,6 +245,12 @@ int parsePath(char *passedPath, ppinfo *ppi)
             printf("pp debug 4: ppi->parent->name:%s\n", ppi->parent->name);
             printf("pp debug2 print token1:%s, ppi->le:%s\n", token1, ppi->le);
             printf("pp debug: ppi->lei:%d\n", ppi->lei);
+            if (entryIsFile(parent, ppi->lei) == 1)
+            {
+                fprintf(stderr, "mfs.c:parsePath: parent[ppi->lei] is a file.\n");
+                ppi->isFile = 1;
+                return -1;
+            }
             return (0);
         }
 
@@ -268,7 +274,7 @@ int parsePath(char *passedPath, ppinfo *ppi)
         {
             fprintf(stderr, "mfs.c:parsePath: parent[ppi->lei] is a file.\n");
             ppi->isFile = 1;
-            return -1; // Unique return value to say path leads to an existing file.
+            return -1;
         }
         // Now we know token 1 does exist, is valid, and is a directory. So we want to load it/get
         // that dir parsePath

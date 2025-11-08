@@ -45,12 +45,12 @@
 #define CMDMV_ON	0
 #define CMDMD_ON	1
 #define CMDRM_ON	1
-#define CMDCP2L_ON	0
-#define CMDCP2FS_ON	0
+#define CMDCP2L_ON	1
+#define CMDCP2FS_ON	1
 #define CMDCD_ON	1
 #define CMDPWD_ON	1
 #define CMDTOUCH_ON	1
-#define CMDCAT_ON	0
+#define CMDCAT_ON	1
 
 
 typedef struct dispatch_t
@@ -304,7 +304,9 @@ int cmd_cat (int argcnt, char *argvec[])
 
 
         testfs_src_fd = b_open (src, O_RDONLY);
-
+		printf("cmd_cat: testfs_src_fd:%d\n inner ls:", testfs_src_fd);
+		char *argv[] = {"ls", "--all"};
+		cmd_ls(2, argv);
         if (testfs_src_fd < 0)
             {
 	    printf ("Failed to open file system file: %s\n", src);

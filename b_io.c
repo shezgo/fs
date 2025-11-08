@@ -154,7 +154,10 @@ Else, return an error.
 	int parseFlag = parsePath(filename, &ppi);
 
 	// Check that the file exists and is not a directory.
-	if ((ppi.parent[ppi.lei].isDirectory && ppi.parent[0].LBAlocation != vcb->root_directory_block) || parseFlag == -1)
+	if (((ppi.parent[ppi.lei].isDirectory == 1) &&
+		 ppi.parent[0].LBAlocation != vcb->root_directory_block) ||
+		(parseFlag == -1 && !(flags & O_CREAT)) ||
+		(ppi.parent[ppi.lei].isDirectory == 1))
 	{
 		printf("parseFlag: %d\n", parseFlag);
 		printf("ppi.parent[ppi.lei].LBAlocation:%ld\n", ppi.parent[ppi.lei].LBAlocation);
@@ -164,11 +167,8 @@ Else, return an error.
 		return -1;
 	}
 
+	// Continue if valid.
 	b_io_fd returnFd;
-
-	//*** TODO ***:  Modify to save or set any information needed
-	//
-	//
 
 	if (startup == 0)
 		b_init(); // Initialize our system
@@ -181,20 +181,10 @@ Else, return an error.
 		return -1;
 	}
 
-	/*DEBUG, should the size of buf be filesize or blocksize?
-	Either reading from file into user's buffer, or writing from
-	user's buffer into file. Buffer should start with filesize I think.
-	*/
-
-	if (ppi.parent[ppi.lei].isDirectory == 1)
-	{
-		fprintf(stderr, "b_open: lei:%d isDirectory:%d",ppi.lei, ppi.parent[ppi.lei].isDirectory);
-		fprintf(stderr, "b_open: Path is not a file.\n");
-		return -1;
-	}
-
+	// This should be executing for basic filepath exists case, why not?
 	if (ppi.isFile)
 	{
+		printf("b_open ppi.isFile block\n");
 		// Allows multiple fcb for the same file, can add mutex locks later.
 		strcpy(fcbArray[returnFd].fileName, ppi.parent[ppi.lei].name);
 		fcbArray[returnFd].buflen = ppi.parent[ppi.lei].size;
@@ -217,35 +207,115 @@ Else, return an error.
 		return (returnFd);
 	}
 
-	char *pathCopy = malloc(CWD_SIZE);
-
-	strcpy(pathCopy, filename);
-
-	if (pathCopy == NULL)
+	// Path does not lead to an existing file, so trim off the last element in path,
+	// verify that the path up until the filename exists, and create that filename in
+	// the parent directory.
+	if (flags & O_CREAT)
 	{
-		perror("strcpy failed");
-		return -1;
-	}
+		char *pathCopy = malloc(CWD_SIZE);
 
-	char *saveptr;
-	char *token1 = strtok_r(pathCopy, "/", &saveptr);
+		strcpy(pathCopy, filename);
 
-	char *token2;
-	int cwdFlag = 0; // set to 1 if creating a file within cwd
-	char *newPath = malloc(CWD_SIZE);
-	if (newPath == NULL)
-	{
-		fprintf(stderr, "b_open: newPath malloc failure.\n");
-		return -1;
-	}
-
-	do
-	{
-		token2 = strtok_r(NULL, "/", &saveptr);
-		cwdFlag++;
-		if (cwdFlag == 1 && token2 == NULL)
+		if (pathCopy == NULL)
 		{
-			DE *parentOfFile = cwdGlobal;
+			perror("strcpy failed");
+			return -1;
+		}
+
+		char *saveptr;
+		char *token1 = strtok_r(pathCopy, "/", &saveptr);
+
+		char *token2;
+		int cwdFlag = 0; // set to 1 if creating a file within cwd
+		char *newPath = malloc(CWD_SIZE);
+		if (newPath == NULL)
+		{
+			fprintf(stderr, "b_open: newPath malloc failure.\n");
+			return -1;
+		}
+
+		do
+		{
+			token2 = strtok_r(NULL, "/", &saveptr);
+			cwdFlag++;
+
+			// If all that is given is the filename, create that.
+			if (cwdFlag == 1 && token2 == NULL)
+			{
+				DE *parentOfFile = cwdGlobal;
+
+				int x = findUnusedDE(parentOfFile);
+				parentOfFile[x].dirNumBlocks = 0;
+				parentOfFile[x].isDirectory = 0;
+				parentOfFile[x].lastAccessed = (time_t)(-1);
+				parentOfFile[x].lastModified = (time_t)(-1);
+				parentOfFile[x].LBAindex = -1;
+				parentOfFile[x].LBAlocation = -1;
+				strcpy(parentOfFile[x].name, token1);
+				parentOfFile[x].size = 0;
+				parentOfFile[x].timeCreation = (time_t)(-1);
+
+				// Update parentOfFile
+				int saveRet = saveDir(parentOfFile);
+				if (saveRet != 1)
+				{
+					fprintf(stderr, "b_open: could not saveDir.\n");
+					return -1;
+				}
+
+				strcpy(fcbArray[returnFd].fileName, parentOfFile[x].name);
+				fcbArray[returnFd].buflen = parentOfFile[x].size;
+				fcbArray[returnFd].buf = malloc(vcb->block_size);
+				fcbArray[returnFd].index = 0;
+				fcbArray[returnFd].flags = flags;
+				fcbArray[returnFd].blockTracker = parentOfFile[x].LBAlocation;
+				fcbArray[returnFd].bufferTracker = 0;
+				fcbArray[returnFd].startBlock = parentOfFile[x].LBAlocation;
+				fcbArray[returnFd].numBytesRead = 0;
+				fcbArray[returnFd].eof = 0;
+				fcbArray[returnFd].fileSize = parentOfFile[x].size;
+
+				if (fcbArray[returnFd].buf == NULL)
+				{
+					fprintf(stderr, "b_open: Memory allocation failed.\n");
+					b_close(returnFd);
+					free(newPath);
+					return -1;
+				}
+				free(newPath);
+				return (returnFd);
+			}
+
+			if (token2 != NULL)
+			{
+				// Add '/' and token1 to newPath
+				strcat(newPath, "/");
+				strcat(newPath, token2);
+				token1 = token2;
+			}
+		} while (token2 != NULL);
+
+		/*
+		If the code has made it here, newPath is necessary and has been built, but no file created yet.
+		If newPath is a valid dir via parsePath, create a new
+		file with token1 as name in newPath as parent.
+
+		This code will never run if parsePath fails on the first path..right?
+		*/
+		ppinfo ppi2;
+		int ppRet = parsePath(newPath, &ppi2);
+		if (ppRet != -1)
+		{
+			/*
+			TODO:
+				ppi2.parent[ppi2.lei] IS the parent
+				Create a DE to describe the child file in this parent.
+				LBAlocation -1 and size will be 0.
+				LBAlocation and size to be updated with cat or other methods that fill the file.
+
+			*/
+			DE *parentOfFile = loadDirLBA(ppi2.parent[ppi2.lei].LBAlocation,
+										  ppi2.parent[ppi2.lei].dirNumBlocks);
 
 			int x = findUnusedDE(parentOfFile);
 			parentOfFile[x].dirNumBlocks = 0;
@@ -282,87 +352,16 @@ Else, return an error.
 			{
 				fprintf(stderr, "b_open: Memory allocation failed.\n");
 				b_close(returnFd);
-				free(newPath);
 				return -1;
 			}
+
+			free(parentOfFile);
 			free(newPath);
 			return (returnFd);
 		}
 
-		if (token2 != NULL)
-		{
-			// Add '/' and token1 to newPath
-			strcat(newPath, "/");
-			strcat(newPath, token2);
-			token1 = token2;
-		}
-	} while (token2 != NULL);
-
-	/*
-	If the code has made it here, newPath should be built.
-	pass newPath into parsePath. If valid dir, create new
-	file with token1 as name in newPath as parent.
-	*/
-
-	ppinfo ppi2;
-	int ppRet = parsePath(newPath, &ppi2);
-	if (ppRet != -1)
-	{
-		/*
-		TODO:
-			ppi2.parent[ppi2.lei] IS the parent
-			Create a DE to describe the child file in this parent.
-			LBAlocation -1 and size will be 0.
-			LBAlocation and size to be updated with cat or other methods that fill the file.
-
-		*/
-		DE *parentOfFile = loadDirLBA(ppi2.parent[ppi2.lei].LBAlocation,
-									  ppi2.parent[ppi2.lei].dirNumBlocks);
-
-		int x = findUnusedDE(parentOfFile);
-		parentOfFile[x].dirNumBlocks = 0;
-		parentOfFile[x].isDirectory = 0;
-		parentOfFile[x].lastAccessed = (time_t)(-1);
-		parentOfFile[x].lastModified = (time_t)(-1);
-		parentOfFile[x].LBAindex = -1;
-		parentOfFile[x].LBAlocation = -1;
-		strcpy(parentOfFile[x].name, token1);
-		parentOfFile[x].size = 0;
-		parentOfFile[x].timeCreation = (time_t)(-1);
-
-		// Update parentOfFile
-		int saveRet = saveDir(parentOfFile);
-		if (saveRet != 1)
-		{
-			fprintf(stderr, "b_open: could not saveDir.\n");
-			return -1;
-		}
-
-		strcpy(fcbArray[returnFd].fileName, parentOfFile[x].name);
-		fcbArray[returnFd].buflen = parentOfFile[x].size;
-		fcbArray[returnFd].buf = malloc(vcb->block_size);
-		fcbArray[returnFd].index = 0;
-		fcbArray[returnFd].flags = flags;
-		fcbArray[returnFd].blockTracker = parentOfFile[x].LBAlocation;
-		fcbArray[returnFd].bufferTracker = 0;
-		fcbArray[returnFd].startBlock = parentOfFile[x].LBAlocation;
-		fcbArray[returnFd].numBytesRead = 0;
-		fcbArray[returnFd].eof = 0;
-		fcbArray[returnFd].fileSize = parentOfFile[x].size;
-
-		if (fcbArray[returnFd].buf == NULL)
-		{
-			fprintf(stderr, "b_open: Memory allocation failed.\n");
-			b_close(returnFd);
-			return -1;
-		}
-
-		free(parentOfFile);
 		free(newPath);
-		return (returnFd);
 	}
-
-	free(newPath);
 	return (returnFd); // all set
 }
 
@@ -550,15 +549,15 @@ int b_read(b_io_fd fd, char *buffer, int count)
 // Interface to Close the file. Returns -1 if failed, 0 if success.
 int b_close(b_io_fd fd)
 {
-	if(fd < 0 || fd >= MAXFCBS)
+	if (fd < 0 || fd >= MAXFCBS)
 	{
 		fprintf(stderr, "b_close: fd is out of bounds.\n");
 		return -1;
 	}
 	int i = fd;
 	free(fcbArray[i].buf);
-	fcbArray[i].buf = NULL; // indicates a free fcbArray
-	strcpy(fcbArray[i].fileName, "");//same as fcbArray[i].fileName[0] = '\0';
+	fcbArray[i].buf = NULL;			  // indicates a free fcbArray
+	strcpy(fcbArray[i].fileName, ""); // same as fcbArray[i].fileName[0] = '\0';
 	fcbArray[i].buflen = -1;
 	fcbArray[i].index = -1;
 	fcbArray[i].flags = -1;
@@ -569,5 +568,5 @@ int b_close(b_io_fd fd)
 	fcbArray[i].eof = -1;
 	fcbArray[i].fileSize = -1;
 
-return 0;
+	return 0;
 }
