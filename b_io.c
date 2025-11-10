@@ -186,7 +186,7 @@ Else, return an error.
 		printf("b_open ppi.isFile block\n");
 		// Allows multiple fcb for the same file, can add mutex locks later.
 		strcpy(fcbArray[returnFd].fileName, ppi.parent[ppi.lei].name);
-		fcbArray[returnFd].buflen = ppi.parent[ppi.lei].size;
+		fcbArray[returnFd].buflen = ppi.parent[ppi.lei].size;//DEBUG should this be vcb->block_size
 		fcbArray[returnFd].buf = malloc(vcb->block_size);
 		fcbArray[returnFd].index = 0;
 		fcbArray[returnFd].flags = flags;
@@ -381,6 +381,25 @@ int b_seek(b_io_fd fd, off_t offset, int whence)
 
 // Interface to write function
 /*
+Write is going to write count bytes from the user's buffer into 
+the file at fd's location.
+
+Confirm: what's fcb.buf used for? Why is it separate from the
+user's buffer, passed into the function?
+fcb tracks reading for a specific file - its buffer is malloced for block_size bytes.
+So if you want to track where an FD is regarding a file, 
+use/update:
+fcbArray[].index,
+fcbArray[].flags (at open),
+fcbArray[].blockTracker,
+fcbArray[].bufferTracker (different from index? no, same. 
+we still have numBytesRead for anything outside of block specific.)
+fcbArray[].startBlock (stays the same but use as reference)
+fcbArray[].fileSize,
+startBlock and fileSize can be used together to determine blocks,
+eof when numBytesRead == fileSize.
+
+PICKUP: refactor fcbArray in conjunction with write pseudocode.
 
 */
 int b_write(b_io_fd fd, char *buffer, int count)
@@ -442,6 +461,7 @@ int b_read(b_io_fd fd, char *buffer, int count)
 	int readCount = count;
 	if ((fcbArray[fd].numBytesRead + readCount) >= fcbArray[fd].fileSize)
 	{
+		printf("fcbArray[fd].fileSize:%d\n", fcbArray[fd].fileSize);
 		readCount = fcbArray[fd].fileSize - fcbArray[fd].numBytesRead;
 		fcbArray[fd].eof = 1;
 		if (readCount == 0)

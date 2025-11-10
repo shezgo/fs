@@ -304,9 +304,7 @@ int cmd_cat (int argcnt, char *argvec[])
 
 
         testfs_src_fd = b_open (src, O_RDONLY);
-		printf("cmd_cat: testfs_src_fd:%d\n inner ls:", testfs_src_fd);
-		char *argv[] = {"ls", "--all"};
-		cmd_ls(2, argv);
+
         if (testfs_src_fd < 0)
             {
 	    printf ("Failed to open file system file: %s\n", src);
