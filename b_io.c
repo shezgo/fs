@@ -33,7 +33,6 @@ typedef struct b_fcb
 	int buflen;				 // holds how many valid bytes are in the buffer
 	int flags;				 // holds the permissions value for O_RDONLY (0), O_WRONLY (1), O_RDWR (2)
 	int blockTracker;		 // holds the current block for tracking which can differ from start block
-	int bufferTracker;		 // holds the index inside the current block for tracking last read value
 	int startBlock;			 // holds the starting block of the file
 	int numBytesRead;		 // If this int reaches the file size, then end of file is reached.
 	int eof;				 // The value is 0 if EOF has not been reached, and is 1 if reached.
@@ -57,7 +56,6 @@ void b_init()
 		fcbArray[i].index = -1;
 		fcbArray[i].flags = -1;
 		fcbArray[i].blockTracker = -1;
-		fcbArray[i].bufferTracker = -1;
 		fcbArray[i].startBlock = -1;
 		fcbArray[i].numBytesRead = -1;
 		fcbArray[i].eof = -1;
@@ -191,7 +189,6 @@ Else, return an error.
 		fcbArray[returnFd].index = 0;
 		fcbArray[returnFd].flags = flags;
 		fcbArray[returnFd].blockTracker = ppi.parent[ppi.lei].LBAlocation;
-		fcbArray[returnFd].bufferTracker = 0;
 		fcbArray[returnFd].startBlock = ppi.parent[ppi.lei].LBAlocation;
 		fcbArray[returnFd].numBytesRead = 0;
 		fcbArray[returnFd].eof = 0;
@@ -268,7 +265,6 @@ Else, return an error.
 				fcbArray[returnFd].index = 0;
 				fcbArray[returnFd].flags = flags;
 				fcbArray[returnFd].blockTracker = parentOfFile[x].LBAlocation;
-				fcbArray[returnFd].bufferTracker = 0;
 				fcbArray[returnFd].startBlock = parentOfFile[x].LBAlocation;
 				fcbArray[returnFd].numBytesRead = 0;
 				fcbArray[returnFd].eof = 0;
@@ -341,7 +337,6 @@ Else, return an error.
 			fcbArray[returnFd].index = 0;
 			fcbArray[returnFd].flags = flags;
 			fcbArray[returnFd].blockTracker = parentOfFile[x].LBAlocation;
-			fcbArray[returnFd].bufferTracker = 0;
 			fcbArray[returnFd].startBlock = parentOfFile[x].LBAlocation;
 			fcbArray[returnFd].numBytesRead = 0;
 			fcbArray[returnFd].eof = 0;
@@ -392,8 +387,6 @@ use/update:
 fcbArray[].index,
 fcbArray[].flags (at open),
 fcbArray[].blockTracker,
-fcbArray[].bufferTracker (different from index? no, same. 
-we still have numBytesRead for anything outside of block specific.)
 fcbArray[].startBlock (stays the same but use as reference)
 fcbArray[].fileSize,
 startBlock and fileSize can be used together to determine blocks,
@@ -401,9 +394,33 @@ eof when numBytesRead == fileSize.
 
 PICKUP: refactor fcbArray in conjunction with write pseudocode.
 
+So what are the steps to write from a buffer into an fd?
+Write as many bytes from the buffer into the fd as you can.
+How big can the buffer potentially be? "Infinitely" long, but we
+know the count requested.
+
+We know fd.buf is blocksize bytes (512).
+
+Count can either be: <= blocksize or > blocksize.
+
+If count <= blocksize:
+write count bytes from buffer to fd
+update fd's index = index + count
+is index used for reading, writing, or both
+to change the index, you'd call b_seek.
+^what if index was at 200 and count was blocksize? you'd fill
+fd's buffer past blocksize. Instead, need to check index + count
+and handle any spillage/multiple block situations.
+
 */
 int b_write(b_io_fd fd, char *buffer, int count)
 {
+		if (fcbArray[fd].flags == O_RDONLY)
+	{
+		printf("Write access not granted.\n");
+		return -1;
+	}
+
 	if (startup == 0)
 		b_init(); // Initialize our system
 
@@ -412,6 +429,14 @@ int b_write(b_io_fd fd, char *buffer, int count)
 	{
 		return (-1); // invalid file descriptor
 	}
+
+	if (fcbArray[fd].buf == NULL || buffer == NULL) // File not open for this descriptor
+	{
+		printf("Invalid fcb buffer or user buffer.\n");
+		return -1;
+	}
+
+
 
 	return (0); // Change this
 }
@@ -437,10 +462,10 @@ int b_write(b_io_fd fd, char *buffer, int count)
 //  +-------------+------------------------------------------------+--------+
 int b_read(b_io_fd fd, char *buffer, int count)
 {
-	if (fcbArray[fd].flags == 1)
+	if (fcbArray[fd].flags == O_WRONLY)
 	{
 		printf("Read access not granted.\n");
-		return 0;
+		return -1;
 	}
 
 	if (startup == 0)
@@ -454,6 +479,7 @@ int b_read(b_io_fd fd, char *buffer, int count)
 
 	if (fcbArray[fd].buf == NULL) // File not open for this descriptor
 	{
+		printf("File not open for this descriptor.\n");
 		return -1;
 	}
 
@@ -473,38 +499,39 @@ int b_read(b_io_fd fd, char *buffer, int count)
 
 	// If user has partially read a file and the amount they're requesting now doesn't require
 	// reading in a new block, or if only one block needs to be LBAread.
-	if (readCount <= (vcb->block_size - fcbArray[fd].bufferTracker))
+	if (readCount <= (vcb->block_size - fcbArray[fd].index))
 	{
 		// If there's nothing in the fcb buffer, read a new block into the fcb buffer
-		if (fcbArray[fd].bufferTracker == 0)
+		if (fcbArray[fd].index == 0)
 		{
 			LBAread(fcbArray[fd].buf, 1, fcbArray[fd].blockTracker);
 			fcbArray[fd].blockTracker += 1;
 		}
 
 		// Read count bytes from fcb buffer into user's buffer and update the buffer tracker
-		memcpy(buffer, fcbArray[fd].buf + fcbArray[fd].bufferTracker, readCount);
-		fcbArray[fd].bufferTracker += readCount; // this should always be < block size.
+		memcpy(buffer, fcbArray[fd].buf + fcbArray[fd].index, readCount);
+		fcbArray[fd].index += readCount; // this should always be < block size.
 		fcbArray[fd].numBytesRead += readCount;
 
-		// If bufferTracker has stepped through the whole block, set it to 0 to reset the tracker.
-		if (fcbArray[fd].bufferTracker == vcb->block_size)
+		// If index has stepped through the whole block, set it to 0 to reset the tracker.
+		if (fcbArray[fd].index == vcb->block_size)
 		{
-			fcbArray[fd].bufferTracker = 0;
+			fcbArray[fd].index = 0;
+			fcbArray[fd].blockTracker++;
 		}
 	}
 
 	else
 	{
 		// If there is data in the buffer that I can read to user's buffer first
-		if (fcbArray[fd].bufferTracker != 0)
+		if (fcbArray[fd].index != 0)
 		{
-			int firstRead = vcb->block_size - fcbArray[fd].bufferTracker;
-			memcpy(buffer, fcbArray[fd].buf + fcbArray[fd].bufferTracker, firstRead);
+			int firstRead = vcb->block_size - fcbArray[fd].index;
+			memcpy(buffer, fcbArray[fd].buf + fcbArray[fd].index, firstRead);
 			buffer += firstRead;
 			fcbArray[fd].numBytesRead += firstRead;
 			readCount -= firstRead;
-			fcbArray[fd].bufferTracker = 0;
+			fcbArray[fd].index = 0;
 			fcbArray[fd].blockTracker += 1;
 		}
 
@@ -539,7 +566,7 @@ int b_read(b_io_fd fd, char *buffer, int count)
 			fcbArray[fd].blockTracker += 1;
 
 			memcpy(buffer, fcbArray[fd].buf, readCount);
-			fcbArray[fd].bufferTracker = readCount;
+			fcbArray[fd].index = readCount;
 			fcbArray[fd].numBytesRead += readCount;
 
 			if (fcbArray[fd].eof == 1)
@@ -581,7 +608,6 @@ int b_close(b_io_fd fd)
 	fcbArray[i].index = -1;
 	fcbArray[i].flags = -1;
 	fcbArray[i].blockTracker = -1;
-	fcbArray[i].bufferTracker = -1;
 	fcbArray[i].startBlock = -1;
 	fcbArray[i].numBytesRead = -1;
 	fcbArray[i].eof = -1;
