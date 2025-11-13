@@ -467,7 +467,8 @@ int b_write(b_io_fd fd, char *buffer, int count)
 		Cases:
 		1. 
 		1a. index > 0, fill up fcb.buf, write first block to disk.
-		1b. Then check how many bytes left to write. Write as many 
+		1b. Then check how many bytes left to write. 
+		If >= 1 block left, write as many 
 		as possible straight to disk with an lbawrite call.
 		1c. Write any left over bytes to buf and zero out the rest.
 		LBAwrite that last block.
