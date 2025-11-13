@@ -458,6 +458,28 @@ int b_write(b_io_fd fd, char *buffer, int count)
 			fcbArray[fd].index += writeCount;
 		}
 	}
+
+	else
+	{
+		/*
+		If we'll need to write multiple times.
+
+		Cases:
+		1. 
+		1a. index > 0, fill up fcb.buf, write first block to disk.
+		1b. Then check how many bytes left to write. Write as many 
+		as possible straight to disk with an lbawrite call.
+		1c. Write any left over bytes to buf and zero out the rest.
+		LBAwrite that last block.
+
+
+		
+		*/
+
+		memcpy(fcbArray[fd].buf + fcbArray[fd].index, buffer,
+		vcb->block_size - fcbArray[fd].index);
+
+	}
 	
 
 
