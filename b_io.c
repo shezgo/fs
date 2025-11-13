@@ -186,6 +186,10 @@ Else, return an error.
 		strcpy(fcbArray[returnFd].fileName, ppi.parent[ppi.lei].name);
 		fcbArray[returnFd].buflen = ppi.parent[ppi.lei].size;//DEBUG should this be vcb->block_size
 		fcbArray[returnFd].buf = malloc(vcb->block_size);
+		for(int i = 0; i < vcb->block_size; i++)
+		{
+			fcbArray[returnFd].buf[i] = '0';
+		}
 		fcbArray[returnFd].index = 0;
 		fcbArray[returnFd].flags = flags;
 		fcbArray[returnFd].blockTracker = ppi.parent[ppi.lei].LBAlocation;
@@ -436,6 +440,25 @@ int b_write(b_io_fd fd, char *buffer, int count)
 		return -1;
 	}
 
+	int writeCount = count;
+
+
+	if(fcbArray[fd].index + writeCount <= vcb->block_size)
+	{
+		memcpy(fcbArray[fd].buf + fcbArray[fd].index, buffer, writeCount);
+		int writeRet = LBAwrite(fcbArray[fd].buf, 1, fcbArray[fd].blockTracker);
+
+		if(fcbArray[fd].index + writeCount == vcb->block_size)
+		{
+			fcbArray[fd].index = 0;
+			fcbArray[fd].blockTracker++;
+		}
+		else
+		{
+			fcbArray[fd].index += writeCount;
+		}
+	}
+	
 
 
 	return (0); // Change this
