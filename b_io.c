@@ -204,7 +204,7 @@ Else, return an error.
 		fcbArray[returnFd].parent = ppi.parent;
 		fcbArray[returnFd].parentLei = ppi.lei;
 
-		printf("ppi.parent[fd].startBlock:%ld\nppi.parent[fd].size:%ld",ppi.parent[ppi.lei].LBAlocation, ppi.parent[ppi.lei].size);
+		printf("ppi.parent[fd].startBlock:%ld\nppi.parent[fd].size:%ld", ppi.parent[ppi.lei].LBAlocation, ppi.parent[ppi.lei].size);
 		printf("fcb...startBlock:%d\nfcb...fileSize:%d\n", fcbArray[returnFd].startBlock, fcbArray[returnFd].fileSize);
 
 		if (fcbArray[returnFd].buf == NULL)
@@ -254,12 +254,14 @@ Else, return an error.
 				DE *parentOfFile = cwdGlobal;
 
 				int x = findUnusedDE(parentOfFile);
-				parentOfFile[x].dirNumBlocks = 1;
+				parentOfFile[x].dirNumBlocks = FILE_NUM_BLOCKS;
 				parentOfFile[x].isDirectory = 0;
 				parentOfFile[x].lastAccessed = (time_t)(-1);
 				parentOfFile[x].lastModified = (time_t)(-1);
 				parentOfFile[x].LBAindex = -1;
-				parentOfFile[x].LBAlocation = -1;
+
+				int newLoc = fsAlloc(bm, FILE_NUM_BLOCKS);
+				parentOfFile[x].LBAlocation = newLoc;
 				strcpy(parentOfFile[x].name, token1);
 				parentOfFile[x].size = 0;
 				parentOfFile[x].timeCreation = (time_t)(-1);
@@ -328,12 +330,14 @@ Else, return an error.
 										  ppi2.parent[ppi2.lei].dirNumBlocks);
 
 			int x = findUnusedDE(parentOfFile);
-			parentOfFile[x].dirNumBlocks = 0;
+			parentOfFile[x].dirNumBlocks = FILE_NUM_BLOCKS;
 			parentOfFile[x].isDirectory = 0;
 			parentOfFile[x].lastAccessed = (time_t)(-1);
 			parentOfFile[x].lastModified = (time_t)(-1);
 			parentOfFile[x].LBAindex = -1;
-			parentOfFile[x].LBAlocation = -1;
+
+			int newLoc = fsAlloc(bm, FILE_NUM_BLOCKS);
+			parentOfFile[x].LBAlocation = newLoc;
 			strcpy(parentOfFile[x].name, token1);
 			parentOfFile[x].size = 0;
 			parentOfFile[x].timeCreation = (time_t)(-1);

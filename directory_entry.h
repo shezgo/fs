@@ -25,6 +25,7 @@
 
 #define NAME 31
 #define DIRECTORY_NUM_BLOCKS 5
+#define FILE_NUM_BLOCKS 10
 
 extern VolumeControlBlock *vcb; // Global definition, always kept in memory 
 extern Bitmap *bm;      //Global declaration of the freespace bitmap
