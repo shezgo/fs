@@ -204,6 +204,9 @@ Else, return an error.
 		fcbArray[returnFd].parent = ppi.parent;
 		fcbArray[returnFd].parentLei = ppi.lei;
 
+		printf("ppi.parent[fd].startBlock:%ld\nppi.parent[fd].size:%ld",ppi.parent[ppi.lei].LBAlocation, ppi.parent[ppi.lei].size);
+		printf("fcb...startBlock:%d\nfcb...fileSize:%d\n", fcbArray[returnFd].startBlock, fcbArray[returnFd].fileSize);
+
 		if (fcbArray[returnFd].buf == NULL)
 		{
 			fprintf(stderr, "b_open: Memory allocation failed.\n");
@@ -251,7 +254,7 @@ Else, return an error.
 				DE *parentOfFile = cwdGlobal;
 
 				int x = findUnusedDE(parentOfFile);
-				parentOfFile[x].dirNumBlocks = 0;
+				parentOfFile[x].dirNumBlocks = 1;
 				parentOfFile[x].isDirectory = 0;
 				parentOfFile[x].lastAccessed = (time_t)(-1);
 				parentOfFile[x].lastModified = (time_t)(-1);
@@ -455,6 +458,7 @@ int b_write(b_io_fd fd, char *buffer, int count)
 	// If writing less than a block from fcbArray[fd]'s current index:
 	if (fcbArray[fd].index + writeCount <= vcb->block_size)
 	{
+		printf("b_write: first clause\n");
 		memcpy(fcbArray[fd].buf + fcbArray[fd].index, buffer, writeCount);
 		int writeRet = LBAwrite(fcbArray[fd].buf, 1, fcbArray[fd].blockTracker);
 
@@ -478,6 +482,8 @@ int b_write(b_io_fd fd, char *buffer, int count)
 			fcbArray[fd].parent[fcbArray[fd].parentLei].size = fcbArray[fd].fileSize;
 			saveDir(fcbArray[fd].parent);
 		}
+
+		printf("b_write: fcbArray[fd].fileSize:%d\n", fcbArray[fd].fileSize);
 
 		return writeCount;
 	}
