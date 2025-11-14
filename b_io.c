@@ -151,10 +151,10 @@ Else, return an error.
 	ppinfo ppi;
 	int parseFlag = parsePath(filename, &ppi);
 
-//*DEBUG this block is executing and returning -1 to cmd_cat.
+	//*DEBUG this block is executing and returning -1 to cmd_cat.
 	// Check that the file exists and is not a directory.
 	if ((ppi.parent[ppi.lei].isDirectory == 1) ||
-	(parseFlag == -1 && !(ppi.isFile))) 
+		(parseFlag == -1 && !(ppi.isFile)))
 	{
 		printf("parseFlag: %d\n", parseFlag);
 		printf("ppi.parent[ppi.lei].LBAlocation:%ld\n", ppi.parent[ppi.lei].LBAlocation);
@@ -184,9 +184,9 @@ Else, return an error.
 		printf("b_open ppi.isFile block\n");
 		// Allows multiple fcb for the same file, can add mutex locks later.
 		strcpy(fcbArray[returnFd].fileName, ppi.parent[ppi.lei].name);
-		fcbArray[returnFd].buflen = ppi.parent[ppi.lei].size;//DEBUG should this be vcb->block_size
+		fcbArray[returnFd].buflen = ppi.parent[ppi.lei].size; // DEBUG should this be vcb->block_size
 		fcbArray[returnFd].buf = malloc(vcb->block_size);
-		for(int i = 0; i < vcb->block_size; i++)
+		for (int i = 0; i < vcb->block_size; i++)
 		{
 			fcbArray[returnFd].buf[i] = '0';
 		}
@@ -380,13 +380,13 @@ int b_seek(b_io_fd fd, off_t offset, int whence)
 
 // Interface to write function
 /*
-Write is going to write count bytes from the user's buffer into 
+Write is going to write count bytes from the user's buffer into
 the file at fd's location.
 
 Confirm: what's fcb.buf used for? Why is it separate from the
 user's buffer, passed into the function?
 fcb tracks reading for a specific file - its buffer is malloced for block_size bytes.
-So if you want to track where an FD is regarding a file, 
+So if you want to track where an FD is regarding a file,
 use/update:
 fcbArray[].index,
 fcbArray[].flags (at open),
@@ -419,7 +419,7 @@ and handle any spillage/multiple block situations.
 */
 int b_write(b_io_fd fd, char *buffer, int count)
 {
-		if (fcbArray[fd].flags == O_RDONLY)
+	if (fcbArray[fd].flags == O_RDONLY)
 	{
 		printf("Write access not granted.\n");
 		return -1;
@@ -442,13 +442,13 @@ int b_write(b_io_fd fd, char *buffer, int count)
 
 	int writeCount = count;
 
-
-	if(fcbArray[fd].index + writeCount <= vcb->block_size)
+	// If writing less than a block from fcbArray[fd]'s current index:
+	if (fcbArray[fd].index + writeCount <= vcb->block_size)
 	{
 		memcpy(fcbArray[fd].buf + fcbArray[fd].index, buffer, writeCount);
 		int writeRet = LBAwrite(fcbArray[fd].buf, 1, fcbArray[fd].blockTracker);
 
-		if(fcbArray[fd].index + writeCount == vcb->block_size)
+		if (fcbArray[fd].index + writeCount == vcb->block_size)
 		{
 			fcbArray[fd].index = 0;
 			fcbArray[fd].blockTracker++;
@@ -457,6 +457,7 @@ int b_write(b_io_fd fd, char *buffer, int count)
 		{
 			fcbArray[fd].index += writeCount;
 		}
+		return writeCount;
 	}
 
 	else
@@ -465,26 +466,64 @@ int b_write(b_io_fd fd, char *buffer, int count)
 		If we'll need to write multiple times.
 
 		Cases:
-		1. 
+		1.
 		1a. index > 0, fill up fcb.buf, write first block to disk.
-		1b. Then check how many bytes left to write. 
-		If >= 1 block left, write as many 
+		1b. Then check how many bytes left to write.
+		If >= 1 block left, write as many
 		as possible straight to disk with an lbawrite call.
 		1c. Write any left over bytes to buf and zero out the rest.
 		LBAwrite that last block.
 
 
-		
+
 		*/
 
-		memcpy(fcbArray[fd].buf + fcbArray[fd].index, buffer,
-		vcb->block_size - fcbArray[fd].index);
+		/*
+		If index > 0, write enough bytes to increment block and reset index to 0.
+		Subtract these bytes from writeCount.
+		*/
+		if (fcbArray[fd].index > 0)
+		{
+			memcpy(fcbArray[fd].buf + fcbArray[fd].index, buffer,
+				   vcb->block_size - fcbArray[fd].index);
 
+			LBAwrite(fcbArray[fd].buf, 1, fcbArray[fd].blockTracker);
+			fcbArray[fd].blockTracker++;
+			fcbArray[fd].index = 0;
+			writeCount = writeCount - (vcb->block_size - fcbArray[fd].index);
+			// Now, have written count - writeCount bytes.
+		}
+
+		/*
+		Write as many full blocks as you can straight to disk in this block,
+		then use fcb buf for remaining bytes in next code block.
+		*/
+		if (writeCount / vcb->block_size >= 1)
+		{
+			int numBlocks = writeCount / vcb->block_size;
+			LBAwrite(buffer + (count - writeCount), numBlocks, fcbArray[fd].blockTracker);
+			fcbArray[fd].blockTracker += numBlocks;
+			writeCount = writeCount - (numBlocks * vcb->block_size);
+			// Now, have written count - writeCount bytes.
+		}
+
+		/*
+		Write any remaining bytes using fcb buf
+		use memcpy.
+		Starting location from buffer will be?
+		buffer + (count - writeCount)
+		*/
+		if (writeCount / vcb->block_size < 1 && writeCount != 0)
+		{
+
+			memcpy(fcbArray[fd].buf, buffer + (count - writeCount), writeCount);
+			LBAwrite(fcbArray[fd].buf, 1, fcbArray[fd].blockTracker);
+			fcbArray[fd].index += writeCount;
+			writeCount = writeCount - writeCount;
+		}
 	}
-	
 
-
-	return (0); // Change this
+	return count - writeCount; // but does this work? i keep subtracting from writeCount.
 }
 
 // Interface to read a buffer
