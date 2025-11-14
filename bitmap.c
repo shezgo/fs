@@ -166,17 +166,17 @@ int fsRelease(Bitmap *bm, int startBlock, int count)
     */
     if (bm == NULL)
     {
-        fprintf(stderr, "Bitmap is null\n");
+        fprintf(stderr, "fsRelease: Bitmap is null\n");
         return -1;
     }
     if (startBlock < 0 || (startBlock + count) > bm->fsNumBlocks)
     {
-        fprintf(stderr, "Invalid blocks");
+        fprintf(stderr, "fsRelease: Invalid blocks");
         return -1;
     }
     if (count < 1)
     {
-        fprintf(stderr, "Invalid count");
+        fprintf(stderr, "fsRelease: Invalid count\n");
         return -1;
     }
 
@@ -187,7 +187,7 @@ int fsRelease(Bitmap *bm, int startBlock, int count)
         clearRet = clearBit(bm, i);
         if (clearRet == -1)
         {
-            fprintf(stderr, "clearBit failed");
+            fprintf(stderr, "fsRelease: clearBit failed\n");
             return -1;
         }
     }

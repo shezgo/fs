@@ -182,7 +182,7 @@ Else, return an error.
 		return -1;
 	}
 
-	// This should be executing for basic filepath exists case, why not?
+	// This should be executing for basic filepath exists case.
 	if (ppi.isFile)
 	{
 		printf("b_open ppi.isFile block\n");
@@ -205,8 +205,9 @@ Else, return an error.
 		fcbArray[returnFd].parentLei = ppi.lei;
 
 		printf("ppi.parent[fd].startBlock:%ld\nppi.parent[fd].size:%ld\n", ppi.parent[ppi.lei].LBAlocation, ppi.parent[ppi.lei].size);
-		printf("fcb...startBlock:%d\nfcb...fileSize:%d\n", fcbArray[returnFd].startBlock, fcbArray[returnFd].fileSize);
-
+		printf("fcb[fd].startBlock:%d\nfcb[fd].fileSize:%d\n", fcbArray[returnFd].startBlock, fcbArray[returnFd].fileSize);
+		printf("b_open print5DEs in fcbArray[returnFd].parent\n");
+		print5DEs(fcbArray[returnFd].parent);
 		if (fcbArray[returnFd].buf == NULL)
 		{
 			fprintf(stderr, "b_open: Memory allocation failed.\n");
@@ -265,6 +266,7 @@ Else, return an error.
 				strcpy(parentOfFile[x].name, token1);
 				parentOfFile[x].size = 0;
 				parentOfFile[x].timeCreation = (time_t)(-1);
+				
 
 				// Update parentOfFile
 				int saveRet = saveDir(parentOfFile);
@@ -285,7 +287,7 @@ Else, return an error.
 				fcbArray[returnFd].eof = 0;
 				fcbArray[returnFd].fileSize = parentOfFile[x].size;
 				fcbArray[returnFd].parent = parentOfFile;
-				fcbArray[returnFd].parentLei = ppi.lei;
+				fcbArray[returnFd].parentLei = x;
 
 				if (fcbArray[returnFd].buf == NULL)
 				{
@@ -361,7 +363,7 @@ Else, return an error.
 			fcbArray[returnFd].eof = 0;
 			fcbArray[returnFd].fileSize = parentOfFile[x].size;
 			fcbArray[returnFd].parent = parentOfFile;
-			fcbArray[returnFd].parentLei = ppi.lei;
+			fcbArray[returnFd].parentLei = x;
 
 			if (fcbArray[returnFd].buf == NULL)
 			{
@@ -476,22 +478,30 @@ int b_write(b_io_fd fd, char *buffer, int count)
 			fcbArray[fd].index += writeCount;
 		}
 
-		// Check/update fileSize if needed.
+		// Check/update fileSize if larger than before.
 		int writeStop = ((fcbArray[fd].blockTracker - fcbArray[fd].startBlock) * vcb->block_size + fcbArray[fd].index + writeCount);
 
+		printf("b_write: writeStop:%d\n", writeStop);
 		if (writeStop > fcbArray[fd].fileSize)
 		{
 			fcbArray[fd].fileSize = writeStop;
 
-			fcbArray[fd].parent[fcbArray[fd].parentLei].size = fcbArray[fd].fileSize;
+			fcbArray[fd].parent[fcbArray[fd].parentLei].size = writeStop;
 			saveDir(fcbArray[fd].parent);
 		}
 
-		printf("b_write: fcbArray[fd].fileSize:%d\n", fcbArray[fd].fileSize);
-		printf("b_write: fcb.parent[lei].size:%ld\n", fcbArray[fd].parent[fcbArray[fd].parentLei].size);
+		printf("b_write: fcb[fd].fileSize:%d\nfcb[fd].startBlock:%d\n", fcbArray[fd].fileSize, fcbArray[fd].startBlock);
+		printf("b_write: fcb.parent[lei].size:%ld\nfcb.parent[lei].startBlock:%ld\n", 
+		fcbArray[fd].parent[fcbArray[fd].parentLei].size, fcbArray[fd].parent[fcbArray[fd].parentLei].LBAlocation);
+		
+		printf("b_write: fcbArray[fd].parentLei:%d\n", fcbArray[fd].parentLei);
+		
+		print5DEs(fcbArray[fd].parent);
+		
 		return writeCount;
 	}
 
+//DEBUG PICKUP: Ensure file sizes update properly from below and onwards.
 	else
 	{
 		/*

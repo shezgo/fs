@@ -716,19 +716,16 @@ int fs_delete(char *filename)
         }
         // Calculate how many blocks the file takes up.
         int numBlocks = (cwdGlobal[x].size + vcb->block_size - 1) / vcb->block_size;
+        if(numBlocks < 10)
+        {
+            numBlocks = 10;
+        }
         char *emptyFile = (char *)malloc(numBlocks * vcb->block_size);
         int writeReturn = LBAwrite(emptyFile, numBlocks, cwdGlobal[x].LBAlocation);
         if (writeReturn == numBlocks)
         {
-            for (int i = cwdGlobal->LBAlocation; i < cwdGlobal->LBAlocation + numBlocks; i++)
-            {
-                int clearReturn = clearBit(bm, i);
-                if (clearReturn == -1)
-                {
-                    fprintf(stderr, "fs_delete: clearBit failed.\n");
-                    return -1;
-                }
-            }
+            fsRelease(bm, cwdGlobal[x].LBAlocation, numBlocks);
+        
             cwdGlobal[x].LBAlocation = -1; // DEs where i >=2 have starting locations of directories/files
             cwdGlobal[x].size = -1;
             for (int i = 0; i < NAME + 1; i++)
@@ -859,16 +856,8 @@ int fs_rmdir(const char *pathname)
         int writeRet = LBAwrite(emptyBuf, dir[0].dirNumBlocks, dir[0].LBAlocation);
         if (writeRet == ppi.parent[ppi.lei].dirNumBlocks)
         {
-            for (int i = dir[0].LBAlocation; i < dir[0].LBAlocation + dir[0].dirNumBlocks; i++)
-            {
-                int clearReturn = clearBit(bm, i);
-                if (clearReturn == -1)
-                {
-                    fprintf(stderr, "fs_rmdir: clearBit failed.\n");
-                    free(dir);
-                    return -1;
-                }
-            }
+            fsRelease(bm, dir[0].LBAlocation, dir[0].dirNumBlocks);
+        
             // Reset DE values at ppi.parent[ppi.lei]
             ppi.parent[ppi.lei].LBAlocation = -1; // DEs where i >=2 have starting locations of directories/files
             ppi.parent[ppi.lei].size = -1;
