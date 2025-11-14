@@ -204,7 +204,7 @@ Else, return an error.
 		fcbArray[returnFd].parent = ppi.parent;
 		fcbArray[returnFd].parentLei = ppi.lei;
 
-		printf("ppi.parent[fd].startBlock:%ld\nppi.parent[fd].size:%ld", ppi.parent[ppi.lei].LBAlocation, ppi.parent[ppi.lei].size);
+		printf("ppi.parent[fd].startBlock:%ld\nppi.parent[fd].size:%ld\n", ppi.parent[ppi.lei].LBAlocation, ppi.parent[ppi.lei].size);
 		printf("fcb...startBlock:%d\nfcb...fileSize:%d\n", fcbArray[returnFd].startBlock, fcbArray[returnFd].fileSize);
 
 		if (fcbArray[returnFd].buf == NULL)
@@ -488,7 +488,7 @@ int b_write(b_io_fd fd, char *buffer, int count)
 		}
 
 		printf("b_write: fcbArray[fd].fileSize:%d\n", fcbArray[fd].fileSize);
-
+		printf("b_write: fcb.parent[lei].size:%ld\n", fcbArray[fd].parent[fcbArray[fd].parentLei].size);
 		return writeCount;
 	}
 
