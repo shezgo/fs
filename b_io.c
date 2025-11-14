@@ -37,6 +37,8 @@ typedef struct b_fcb
 	int numBytesRead;		 // If this int reaches the file size, then end of file is reached.
 	int eof;				 // The value is 0 if EOF has not been reached, and is 1 if reached.
 	int fileSize;			 // The size of the file
+	DE *parent;
+	int parentLei;
 
 } b_fcb;
 
@@ -60,6 +62,8 @@ void b_init()
 		fcbArray[i].numBytesRead = -1;
 		fcbArray[i].eof = -1;
 		fcbArray[i].fileSize = -1;
+		fcbArray[i].parent = NULL;
+		fcbArray[i].parentLei = -1;
 	}
 
 	startup = 1;
@@ -197,6 +201,8 @@ Else, return an error.
 		fcbArray[returnFd].numBytesRead = 0;
 		fcbArray[returnFd].eof = 0;
 		fcbArray[returnFd].fileSize = ppi.parent[ppi.lei].size;
+		fcbArray[returnFd].parent = ppi.parent;
+		fcbArray[returnFd].parentLei = ppi.lei;
 
 		if (fcbArray[returnFd].buf == NULL)
 		{
@@ -273,6 +279,8 @@ Else, return an error.
 				fcbArray[returnFd].numBytesRead = 0;
 				fcbArray[returnFd].eof = 0;
 				fcbArray[returnFd].fileSize = parentOfFile[x].size;
+				fcbArray[returnFd].parent = parentOfFile;
+				fcbArray[returnFd].parentLei = ppi.lei;
 
 				if (fcbArray[returnFd].buf == NULL)
 				{
@@ -345,6 +353,8 @@ Else, return an error.
 			fcbArray[returnFd].numBytesRead = 0;
 			fcbArray[returnFd].eof = 0;
 			fcbArray[returnFd].fileSize = parentOfFile[x].size;
+			fcbArray[returnFd].parent = parentOfFile;
+			fcbArray[returnFd].parentLei = ppi.lei;
 
 			if (fcbArray[returnFd].buf == NULL)
 			{
@@ -457,6 +467,18 @@ int b_write(b_io_fd fd, char *buffer, int count)
 		{
 			fcbArray[fd].index += writeCount;
 		}
+
+		// Check/update fileSize if needed.
+		int writeStop = ((fcbArray[fd].blockTracker - fcbArray[fd].startBlock) * vcb->block_size + fcbArray[fd].index + writeCount);
+
+		if (writeStop > fcbArray[fd].fileSize)
+		{
+			fcbArray[fd].fileSize = writeStop;
+
+			fcbArray[fd].parent[fcbArray[fd].parentLei].size = fcbArray[fd].fileSize;
+			saveDir(fcbArray[fd].parent);
+		}
+
 		return writeCount;
 	}
 
@@ -522,8 +544,17 @@ int b_write(b_io_fd fd, char *buffer, int count)
 			writeCount = writeCount - writeCount;
 		}
 	}
+	// Check/update fileSize if needed.
+	int writeStop = ((fcbArray[fd].blockTracker - fcbArray[fd].startBlock) * vcb->block_size + fcbArray[fd].index + writeCount);
 
-	return count - writeCount; // but does this work? i keep subtracting from writeCount.
+	if (writeStop > fcbArray[fd].fileSize)
+	{
+		fcbArray[fd].fileSize = writeStop;
+
+		fcbArray[fd].parent[fcbArray[fd].parentLei].size = fcbArray[fd].fileSize;
+		saveDir(fcbArray[fd].parent);
+	}
+	return count - writeCount;
 }
 
 // Interface to read a buffer
@@ -697,6 +728,12 @@ int b_close(b_io_fd fd)
 	fcbArray[i].numBytesRead = -1;
 	fcbArray[i].eof = -1;
 	fcbArray[i].fileSize = -1;
+	fcbArray[i].parentLei = -1;
+
+	if (fcbArray[i].parent != rootGlobal && fcbArray[i].parent != cwdGlobal)
+	{
+		free(fcbArray[i].parent);
+	}
 
 	return 0;
 }
