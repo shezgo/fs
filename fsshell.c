@@ -113,13 +113,11 @@ int displayFiles (fdDir * dirp, int flall, int fllong)
 			{
 			if (fllong)
 				{
-				printf("fsshell.c:displayFiles: DEBUG: print di->d_name\n");
 				fs_stat (di->d_name, &statbuf);
 				printf ("%s    %9ld   %s\n", fs_isDir(di->d_name)?"D":"-", statbuf.st_size, di->d_name);
 				}
 			else
 				{
-				printf("fsshell.c:displayFiles: DEBUG2: print di->d_name\n");
 				printf ("%s\n", di->d_name);
 				}
 			}
@@ -137,7 +135,7 @@ int displayFiles (fdDir * dirp, int flall, int fllong)
 ****************************************************/
 int cmd_ls (int argcnt, char *argvec[])
 	{
-		printf("cmd_ls: argvec[1]:%s\n", argvec[1]);
+
 #if (CMDLS_ON == 1)				
 	int option_index;
 	int c;
@@ -209,13 +207,10 @@ int cmd_ls (int argcnt, char *argvec[])
 		//processing arguments after options
 		for (int k = optind; k < argcnt; k++)
 			{
-			printf("2nd cmd_ls: argvec[1]:%s\n", argvec[1]);
-			if (fs_isDir(argvec[k]))
+if (fs_isDir(argvec[k]))
 				{
 				fdDir * dirp;
-				printf("ls first clause: argvec[k]:%s\n", argvec[k]);
 				dirp = fs_opendir (argvec[k]);
-				printf("first clause in ls\n");
 				displayFiles (dirp, flall, fllong);
 				}
 			else // it is just a file ?
@@ -235,10 +230,8 @@ int cmd_ls (int argcnt, char *argvec[])
 	else   // no pathname/filename specified - use cwd
 		{
 		char * path = fs_getcwd(cwd, DIRMAX_LEN);	//get current working directory
-		printf("ls no pathname: path:%s\n", path);
 		fdDir * dirp;
 		dirp = fs_opendir (path);
-		printf("second clause in ls\n");
 		return (displayFiles (dirp, flall, fllong));
 		}
 #endif

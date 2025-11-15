@@ -104,8 +104,6 @@ int freeIfNotNeedDir(DE *dir)
             if (dir != rootGlobal)
             {
                 free(dir);
-                printf("Freeing directory check. dir:%s\n", dir->name);
-
                 return 1;
             }
         }
@@ -233,18 +231,13 @@ int parsePath(char *passedPath, ppinfo *ppi)
 
         // if findNameInDir can't find token1, it returns -1 to ppi->lei.
         ppi->lei = findNameInDir(parent, token1);
-        printf("pp debug - ppi->lei:%d\n", ppi->lei);
         token2 = strtok_r(NULL, "/", &saveptr);
-        printf("pp debug - token2:%s\n", token2 ? token2 : "NULL");
-        printf("pp debug print token1:%s, ppi->le:%s\n", token1, ppi->le);
-        // Success: If token2 is null then token1 is the last element.
+// Success: If token2 is null then token1 is the last element.
         // If token2 is not null, that tells you token1 has to exist and must be a directory.
         if (token2 == NULL)
         {
             ppi->parent = parent;
-            printf("pp debug 4: ppi->parent->name:%s\n", ppi->parent->name);
-            printf("pp debug2 print token1:%s, ppi->le:%s\n", token1, ppi->le);
-            printf("pp debug: ppi->lei:%d\n", ppi->lei);
+
             if (entryIsFile(parent, ppi->lei) == 1)
             {
                 fprintf(stderr, "mfs.c:parsePath: parent[ppi->lei] is a file.\n");
@@ -257,7 +250,6 @@ int parsePath(char *passedPath, ppinfo *ppi)
         // This triggers if at any point in the path, an element doesn't exist
         if (ppi->lei < 0) // the name doesn’t exist, invalid path
         {
-            printf("pp debug 1\n");
             fprintf(stderr, "Invalid path\n");
             return -1;
         }
@@ -265,7 +257,6 @@ int parsePath(char *passedPath, ppinfo *ppi)
         // Helper function EntryisDir - if parent[ppi->lei] is NOT a directory, error?
         if (entryIsDir(parent, ppi->lei) == 0 && entryIsFile(parent, ppi->lei) != 1)
         {
-            printf("pp debug 2\n");
             fprintf(stderr, "mfs.c:parsePath: parent[ppi->lei] is not a directory. \n");
             return -1;
         }
@@ -290,7 +281,6 @@ int parsePath(char *passedPath, ppinfo *ppi)
         freeIfNotNeedDir(parent); // not null, not cwd, not root
         parent = temp;
         token1 = token2;
-        printf("parsepath round complete\n");
 
     } while (token2 != NULL);
     // if the index is invalid, exit
@@ -395,7 +385,6 @@ fdDir *fs_opendir(const char *pathname)
         return NULL;
     }
 
-    printf("fs_opendir: ppi.lei:%d\n", ppi.lei);
     DE *thisDir = loadDirLBA((ppi.parent[ppi.lei]).dirNumBlocks, (ppi.parent[ppi.lei]).LBAlocation);
 
     if (thisDir == NULL)
@@ -463,7 +452,7 @@ struct fs_diriteminfo *fs_readdir(fdDir *dirp)
 {
     if (dirp == NULL)
     {
-        fprintf(stderr, "fDirectory is invalid");
+        fprintf(stderr, "Directory is invalid");
         return NULL;
     }
 
@@ -481,7 +470,6 @@ struct fs_diriteminfo *fs_readdir(fdDir *dirp)
 
     if (dirp->dirEntryPosition >= dirp->numEntries)
     {
-        printf("fs_readdir: No more filled entries in dirp, return\n");
         return NULL;
     }
 

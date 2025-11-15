@@ -186,7 +186,6 @@ DE *loadDirLBA(int numBlocks, int startBlock)
         perror("Failed to allocate for buffer in loadDir\n");
         exit(EXIT_FAILURE);
     }
-    printf("loadDirLBA numBlocks:%d\n", numBlocks);
     int readReturn = LBAread(buffer, numBlocks, startBlock);
 
     if (readReturn != numBlocks)

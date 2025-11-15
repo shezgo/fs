@@ -206,8 +206,7 @@ Else, return an error.
 
 		printf("ppi.parent[fd].startBlock:%ld\nppi.parent[fd].size:%ld\n", ppi.parent[ppi.lei].LBAlocation, ppi.parent[ppi.lei].size);
 		printf("fcb[fd].startBlock:%d\nfcb[fd].fileSize:%d\n", fcbArray[returnFd].startBlock, fcbArray[returnFd].fileSize);
-		printf("b_open print5DEs in fcbArray[returnFd].parent\n");
-		print5DEs(fcbArray[returnFd].parent);
+
 		if (fcbArray[returnFd].buf == NULL)
 		{
 			fprintf(stderr, "b_open: Memory allocation failed.\n");
@@ -266,7 +265,6 @@ Else, return an error.
 				strcpy(parentOfFile[x].name, token1);
 				parentOfFile[x].size = 0;
 				parentOfFile[x].timeCreation = (time_t)(-1);
-				
 
 				// Update parentOfFile
 				int saveRet = saveDir(parentOfFile);
@@ -491,17 +489,15 @@ int b_write(b_io_fd fd, char *buffer, int count)
 		}
 
 		printf("b_write: fcb[fd].fileSize:%d\nfcb[fd].startBlock:%d\n", fcbArray[fd].fileSize, fcbArray[fd].startBlock);
-		printf("b_write: fcb.parent[lei].size:%ld\nfcb.parent[lei].startBlock:%ld\n", 
-		fcbArray[fd].parent[fcbArray[fd].parentLei].size, fcbArray[fd].parent[fcbArray[fd].parentLei].LBAlocation);
-		
+		printf("b_write: fcb.parent[lei].size:%ld\nfcb.parent[lei].startBlock:%ld\n",
+			   fcbArray[fd].parent[fcbArray[fd].parentLei].size, fcbArray[fd].parent[fcbArray[fd].parentLei].LBAlocation);
+
 		printf("b_write: fcbArray[fd].parentLei:%d\n", fcbArray[fd].parentLei);
-		
-		print5DEs(fcbArray[fd].parent);
-		
+
 		return writeCount;
 	}
 
-//DEBUG PICKUP: Ensure file sizes update properly from below and onwards.
+	// DEBUG PICKUP: Ensure file sizes update properly from below and onwards.
 	else
 	{
 		/*
@@ -615,7 +611,7 @@ int b_read(b_io_fd fd, char *buffer, int count)
 
 	if (fcbArray[fd].buf == NULL) // File not open for this descriptor
 	{
-		printf("File not open for this descriptor.\n");
+		printf("b_read: File not open for this descriptor.\n");
 		return -1;
 	}
 
@@ -623,12 +619,13 @@ int b_read(b_io_fd fd, char *buffer, int count)
 	int readCount = count;
 	if ((fcbArray[fd].numBytesRead + readCount) >= fcbArray[fd].fileSize)
 	{
-		printf("fcbArray[fd].fileSize:%d\n", fcbArray[fd].fileSize);
+		printf("b_read: fcbArray[fd].fileSize:%d\n", fcbArray[fd].fileSize);
 		readCount = fcbArray[fd].fileSize - fcbArray[fd].numBytesRead;
 		fcbArray[fd].eof = 1;
+		printf("b_read: readCount trimmed from count:%d to %d\n", count, readCount);
 		if (readCount == 0)
 		{
-			printf("End of file reached - nothing to read.\n");
+			printf("b_read: End of file reached - nothing to read.\n");
 			return 0; // 0 bytes copied into user's buffer
 		}
 	}
@@ -657,6 +654,7 @@ int b_read(b_io_fd fd, char *buffer, int count)
 		}
 	}
 
+//DEBUG: Blocks above this line tested and working.
 	else
 	{
 		// If there is data in the buffer that I can read to user's buffer first
@@ -685,7 +683,7 @@ int b_read(b_io_fd fd, char *buffer, int count)
 				// but when does eof get triggered here?
 				if (fcbArray[fd].eof == 1)
 				{
-					printf("End of file reached.\n");
+					printf("b_read: 1End of file reached.\n");
 					return 0;
 				}
 				else
@@ -707,7 +705,7 @@ int b_read(b_io_fd fd, char *buffer, int count)
 
 			if (fcbArray[fd].eof == 1)
 			{
-				printf("End of file reached.\n");
+				printf("b_read: 2End of file reached.\n");
 				return readCount;
 			}
 			else
@@ -719,13 +717,10 @@ int b_read(b_io_fd fd, char *buffer, int count)
 
 	if (fcbArray[fd].eof == 1)
 	{
-		printf("End of file reached.\n");
-		return 0;
+		printf("b_read: 3End of file reached.\n");
 	}
-	else
-	{
-		return readCount;
-	}
+
+	return readCount;
 }
 
 // Interface to Close the file. Returns -1 if failed, 0 if success.
