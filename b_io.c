@@ -457,6 +457,12 @@ int b_write(b_io_fd fd, char *buffer, int count)
 		return -1;
 	}
 
+	if (count < 0)
+	{
+		printf("Invalid value for count.\n");
+		return -1;
+	}
+
 	int writeCount = count;
 
 	// If writing less than a block from fcbArray[fd]'s current index:
@@ -466,6 +472,8 @@ int b_write(b_io_fd fd, char *buffer, int count)
 		memcpy(fcbArray[fd].buf + fcbArray[fd].index, buffer, writeCount);
 		int writeRet = LBAwrite(fcbArray[fd].buf, 1, fcbArray[fd].blockTracker);
 
+		int writeStop = (((fcbArray[fd].blockTracker - fcbArray[fd].startBlock) * vcb->block_size) 
+		+ fcbArray[fd].index + writeCount);
 		if (fcbArray[fd].index + writeCount == vcb->block_size)
 		{
 			fcbArray[fd].index = 0;
@@ -475,21 +483,24 @@ int b_write(b_io_fd fd, char *buffer, int count)
 		{
 			fcbArray[fd].index += writeCount;
 		}
-
+		//printf("b_write: writeCount:%d\nfcbArray[fd].index:%d\nfcbArray[fd].blockTracker:%d\nfcbArray[fd].startBlock:%d\n",writeCount, fcbArray[fd].index, fcbArray[fd].blockTracker,fcbArray[fd].startBlock);
 		// Check/update fileSize if larger than before.
-		int writeStop = ((fcbArray[fd].blockTracker - fcbArray[fd].startBlock) * vcb->block_size + fcbArray[fd].index + writeCount);
+		
 
 		printf("b_write: writeStop:%d\n", writeStop);
 		if (writeStop > fcbArray[fd].fileSize)
 		{
 			fcbArray[fd].fileSize = writeStop;
+			printf("1 b_write: fcbArray[fd].fileSize:%d\n", fcbArray[fd].fileSize);
 
 			fcbArray[fd].parent[fcbArray[fd].parentLei].size = writeStop;
+			printf("2 b_write: fcbArray[fd].parent[fcbArray[fd].parentLei].size: %ld\n", fcbArray[fd].parent[fcbArray[fd].parentLei].size);
+
 			saveDir(fcbArray[fd].parent);
 		}
 
-		printf("b_write: fcb[fd].fileSize:%d\nfcb[fd].startBlock:%d\n", fcbArray[fd].fileSize, fcbArray[fd].startBlock);
-		printf("b_write: fcb.parent[lei].size:%ld\nfcb.parent[lei].startBlock:%ld\n",
+		printf("3 b_write: fcb[fd].fileSize:%d\nfcb[fd].startBlock:%d\n", fcbArray[fd].fileSize, fcbArray[fd].startBlock);
+		printf("4 b_write: fcb.parent[lei].size:%ld\nfcb.parent[lei].startBlock:%ld\n",
 			   fcbArray[fd].parent[fcbArray[fd].parentLei].size, fcbArray[fd].parent[fcbArray[fd].parentLei].LBAlocation);
 
 		printf("b_write: fcbArray[fd].parentLei:%d\n", fcbArray[fd].parentLei);
@@ -524,12 +535,14 @@ int b_write(b_io_fd fd, char *buffer, int count)
 		{
 			memcpy(fcbArray[fd].buf + fcbArray[fd].index, buffer,
 				   vcb->block_size - fcbArray[fd].index);
-
+			printf("b_write: filling current block before crossing into next block\n");
 			LBAwrite(fcbArray[fd].buf, 1, fcbArray[fd].blockTracker);
-			fcbArray[fd].blockTracker++;
-			fcbArray[fd].index = 0;
 			writeCount = writeCount - (vcb->block_size - fcbArray[fd].index);
 			// Now, have written count - writeCount bytes.
+			fcbArray[fd].fileSize += (vcb->block_size - fcbArray[fd].index);
+			fcbArray[fd].blockTracker++;
+			fcbArray[fd].index = 0;
+			
 		}
 
 		/*
@@ -542,6 +555,7 @@ int b_write(b_io_fd fd, char *buffer, int count)
 			LBAwrite(buffer + (count - writeCount), numBlocks, fcbArray[fd].blockTracker);
 			fcbArray[fd].blockTracker += numBlocks;
 			writeCount = writeCount - (numBlocks * vcb->block_size);
+			fcbArray[fd].fileSize += (numBlocks * vcb->block_size);
 			// Now, have written count - writeCount bytes.
 		}
 
@@ -551,25 +565,20 @@ int b_write(b_io_fd fd, char *buffer, int count)
 		Starting location from buffer will be?
 		buffer + (count - writeCount)
 		*/
-		if (writeCount / vcb->block_size < 1 && writeCount != 0)
+		if (writeCount / vcb->block_size < 1 && !(writeCount <= 0))
 		{
 
 			memcpy(fcbArray[fd].buf, buffer + (count - writeCount), writeCount);
 			LBAwrite(fcbArray[fd].buf, 1, fcbArray[fd].blockTracker);
+			fcbArray[fd].fileSize += writeCount;
 			fcbArray[fd].index += writeCount;
 			writeCount = writeCount - writeCount;
 		}
 	}
 	// Check/update fileSize if needed.
 	int writeStop = ((fcbArray[fd].blockTracker - fcbArray[fd].startBlock) * vcb->block_size + fcbArray[fd].index + writeCount);
-
-	if (writeStop > fcbArray[fd].fileSize)
-	{
-		fcbArray[fd].fileSize = writeStop;
-
-		fcbArray[fd].parent[fcbArray[fd].parentLei].size = fcbArray[fd].fileSize;
-		saveDir(fcbArray[fd].parent);
-	}
+	saveDir(fcbArray[fd].parent);
+	
 	return count - writeCount;
 }
 
@@ -615,8 +624,11 @@ int b_read(b_io_fd fd, char *buffer, int count)
 		return -1;
 	}
 
-	// Check if the end of file will be reached with this call, trim readCount if needed.
 	int readCount = count;
+	int actualCount = 0; // This will count how many bytes we actually read into user's buffer.
+
+	// Check if the end of file will be reached with this call, trim readCount if needed.
+
 	if ((fcbArray[fd].numBytesRead + readCount) >= fcbArray[fd].fileSize)
 	{
 		printf("b_read: fcbArray[fd].fileSize:%d\n", fcbArray[fd].fileSize);
@@ -643,6 +655,7 @@ int b_read(b_io_fd fd, char *buffer, int count)
 
 		// Read count bytes from fcb buffer into user's buffer and update the buffer tracker
 		memcpy(buffer, fcbArray[fd].buf + fcbArray[fd].index, readCount);
+		actualCount += readCount;
 		fcbArray[fd].index += readCount; // this should always be < block size.
 		fcbArray[fd].numBytesRead += readCount;
 
@@ -654,7 +667,7 @@ int b_read(b_io_fd fd, char *buffer, int count)
 		}
 	}
 
-//DEBUG: Blocks above this line tested and working.
+	// DEBUG: Blocks above this line tested and working.
 	else
 	{
 		// If there is data in the buffer that I can read to user's buffer first
@@ -662,6 +675,7 @@ int b_read(b_io_fd fd, char *buffer, int count)
 		{
 			int firstRead = vcb->block_size - fcbArray[fd].index;
 			memcpy(buffer, fcbArray[fd].buf + fcbArray[fd].index, firstRead);
+			actualCount += firstRead;
 			buffer += firstRead;
 			fcbArray[fd].numBytesRead += firstRead;
 			readCount -= firstRead;
@@ -680,6 +694,7 @@ int b_read(b_io_fd fd, char *buffer, int count)
 				LBAread(buffer, numBlocks, fcbArray[fd].blockTracker);
 				fcbArray[fd].blockTracker += numBlocks;
 				fcbArray[fd].numBytesRead += (numBlocks * vcb->block_size);
+				actualCount += (numBlocks * vcb->block_size);
 				// but when does eof get triggered here?
 				if (fcbArray[fd].eof == 1)
 				{
@@ -688,7 +703,7 @@ int b_read(b_io_fd fd, char *buffer, int count)
 				}
 				else
 				{
-					return readCount;
+					return actualCount;
 				}
 			}
 		}
@@ -700,17 +715,18 @@ int b_read(b_io_fd fd, char *buffer, int count)
 			fcbArray[fd].blockTracker += 1;
 
 			memcpy(buffer, fcbArray[fd].buf, readCount);
+			actualCount += readCount;
 			fcbArray[fd].index = readCount;
 			fcbArray[fd].numBytesRead += readCount;
 
 			if (fcbArray[fd].eof == 1)
 			{
 				printf("b_read: 2End of file reached.\n");
-				return readCount;
+				return actualCount;
 			}
 			else
 			{
-				return readCount;
+				return actualCount;
 			}
 		}
 	}
@@ -720,7 +736,7 @@ int b_read(b_io_fd fd, char *buffer, int count)
 		printf("b_read: 3End of file reached.\n");
 	}
 
-	return readCount;
+	return actualCount;
 }
 
 // Interface to Close the file. Returns -1 if failed, 0 if success.

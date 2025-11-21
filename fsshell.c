@@ -41,8 +41,8 @@
 
 /****   SET THESE TO 1 WHEN READY TO TEST THAT COMMAND ****/
 #define CMDLS_ON	1
-#define CMDCP_ON	0
-#define CMDMV_ON	0
+#define CMDCP_ON	1
+#define CMDMV_ON	1
 #define CMDMD_ON	1
 #define CMDRM_ON	1
 #define CMDCP2L_ON	1
@@ -372,6 +372,21 @@ int cmd_mv (int argcnt, char *argvec[])
 #if (CMDMV_ON == 1)				
 	return -99;
 	// **** TODO ****  For you to implement	
+	/*
+
+	This command will move argvec[1] (src) to argvec[2] (dest)
+	src can be either a directory or a file.
+	dest must not be a file.
+	If dest is not an existing dir, mv renames the source to dest.
+
+	Once checks are complete:
+	Update .. of source to being an open DE in dest
+	Update this new DE in dest to containing the meta data
+	of src, ie:
+	dest[newIndex].LBAlocation = src[0].LBAlocation
+	strcpy(dest[newIndex].name, srcName);
+	
+	*/
 #endif
 	return 0;
 	}
@@ -505,7 +520,9 @@ int cmd_cp2fs (int argcnt, char *argvec[])
 	do 
 		{
 		readcnt = read (linux_fd, buf, BUFFERLEN);
+		printf("cmd_cp2fs readcnt:%d\n", readcnt);
 		b_write (testfs_fd, buf, readcnt);
+		printf("cmd_cp2fs: after b_write\n");
 		} while (readcnt == BUFFERLEN);
 	b_close (testfs_fd);
 	close (linux_fd);
