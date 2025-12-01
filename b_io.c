@@ -472,8 +472,7 @@ int b_write(b_io_fd fd, char *buffer, int count)
 		memcpy(fcbArray[fd].buf + fcbArray[fd].index, buffer, writeCount);
 		int writeRet = LBAwrite(fcbArray[fd].buf, 1, fcbArray[fd].blockTracker);
 
-		int writeStop = (((fcbArray[fd].blockTracker - fcbArray[fd].startBlock) * vcb->block_size) 
-		+ fcbArray[fd].index + writeCount);
+		int writeStop = (((fcbArray[fd].blockTracker - fcbArray[fd].startBlock) * vcb->block_size) + fcbArray[fd].index + writeCount);
 		if (fcbArray[fd].index + writeCount == vcb->block_size)
 		{
 			fcbArray[fd].index = 0;
@@ -483,9 +482,8 @@ int b_write(b_io_fd fd, char *buffer, int count)
 		{
 			fcbArray[fd].index += writeCount;
 		}
-		//printf("b_write: writeCount:%d\nfcbArray[fd].index:%d\nfcbArray[fd].blockTracker:%d\nfcbArray[fd].startBlock:%d\n",writeCount, fcbArray[fd].index, fcbArray[fd].blockTracker,fcbArray[fd].startBlock);
-		// Check/update fileSize if larger than before.
-		
+		// printf("b_write: writeCount:%d\nfcbArray[fd].index:%d\nfcbArray[fd].blockTracker:%d\nfcbArray[fd].startBlock:%d\n",writeCount, fcbArray[fd].index, fcbArray[fd].blockTracker,fcbArray[fd].startBlock);
+		//  Check/update fileSize if larger than before.
 
 		printf("b_write: writeStop:%d\n", writeStop);
 		if (writeStop > fcbArray[fd].fileSize)
@@ -542,7 +540,6 @@ int b_write(b_io_fd fd, char *buffer, int count)
 			fcbArray[fd].fileSize += (vcb->block_size - fcbArray[fd].index);
 			fcbArray[fd].blockTracker++;
 			fcbArray[fd].index = 0;
-			
 		}
 
 		/*
@@ -578,7 +575,7 @@ int b_write(b_io_fd fd, char *buffer, int count)
 	// Check/update fileSize if needed.
 	int writeStop = ((fcbArray[fd].blockTracker - fcbArray[fd].startBlock) * vcb->block_size + fcbArray[fd].index + writeCount);
 	saveDir(fcbArray[fd].parent);
-	
+
 	return count - writeCount;
 }
 
@@ -628,11 +625,11 @@ int b_read(b_io_fd fd, char *buffer, int count)
 	int actualCount = 0; // This will count how many bytes we actually read into user's buffer.
 
 	// Check if the end of file will be reached with this call, trim readCount if needed.
-
 	if ((fcbArray[fd].numBytesRead + readCount) >= fcbArray[fd].fileSize)
 	{
-		printf("b_read: fcbArray[fd].fileSize:%d\n", fcbArray[fd].fileSize);
+		printf("b_read block 1:fcbArray[fd].fileSize:%d\n", fcbArray[fd].fileSize);
 		readCount = fcbArray[fd].fileSize - fcbArray[fd].numBytesRead;
+
 		fcbArray[fd].eof = 1;
 		printf("b_read: readCount trimmed from count:%d to %d\n", count, readCount);
 		if (readCount == 0)
@@ -642,93 +639,72 @@ int b_read(b_io_fd fd, char *buffer, int count)
 		}
 	}
 
-	// If user has partially read a file and the amount they're requesting now doesn't require
-	// reading in a new block, or if only one block needs to be LBAread.
-	if (readCount <= (vcb->block_size - fcbArray[fd].index))
+	// If we need to read in the first block from disk.
+	if (fcbArray[fd].blockTracker == fcbArray[fd].startBlock && fcbArray[fd].index == 0)
 	{
-		// If there's nothing in the fcb buffer, read a new block into the fcb buffer
-		if (fcbArray[fd].index == 0)
+		//printf("b_read: block 2\n");
+		int readRet = LBAread(fcbArray[fd].buf, 1, fcbArray[fd].startBlock);
+		if (readRet != 1)
 		{
-			LBAread(fcbArray[fd].buf, 1, fcbArray[fd].blockTracker);
-			fcbArray[fd].blockTracker += 1;
+			fprintf(stderr, "b_read: LBAread error 1.\n");
 		}
-
-		// Read count bytes from fcb buffer into user's buffer and update the buffer tracker
-		memcpy(buffer, fcbArray[fd].buf + fcbArray[fd].index, readCount);
-		actualCount += readCount;
-		fcbArray[fd].index += readCount; // this should always be < block size.
-		fcbArray[fd].numBytesRead += readCount;
-
-		// If index has stepped through the whole block, set it to 0 to reset the tracker.
-		if (fcbArray[fd].index == vcb->block_size)
-		{
-			fcbArray[fd].index = 0;
-			fcbArray[fd].blockTracker++;
-		}
+		// Do not update fd's blockTracker here - that only updates once the fd's index > blocksize.
 	}
 
-	// DEBUG: Blocks above this line tested and working.
-	else
+	// Part 1: if no new block needs to be read into the fd's buffer.
+	if (readCount < (vcb->block_size - fcbArray[fd].index))
 	{
-		// If there is data in the buffer that I can read to user's buffer first
-		if (fcbArray[fd].index != 0)
-		{
-			int firstRead = vcb->block_size - fcbArray[fd].index;
-			memcpy(buffer, fcbArray[fd].buf + fcbArray[fd].index, firstRead);
-			actualCount += firstRead;
-			buffer += firstRead;
-			fcbArray[fd].numBytesRead += firstRead;
-			readCount -= firstRead;
-			fcbArray[fd].index = 0;
-			fcbArray[fd].blockTracker += 1;
-		}
+		//printf("b_read: block 3\n");
+		memcpy(buffer, fcbArray[fd].buf + fcbArray[fd].index, readCount);
+		fcbArray[fd].index += readCount;
+		fcbArray[fd].numBytesRead += readCount;
+		actualCount += readCount;
+		return actualCount;
+	}
 
-		// Calculate how many blocks to LBAread
+	// If after clearing the current fd's buffer, more blocks may need to be read from disk.
+	if (readCount >= (vcb->block_size - fcbArray[fd].index))
+	{
+		//printf("b_read: block 4\n");
+		memcpy(buffer + actualCount, fcbArray[fd].buf + fcbArray[fd].index, (vcb->block_size - fcbArray[fd].index));
+		fcbArray[fd].blockTracker++;
+		actualCount += (vcb->block_size - fcbArray[fd].index);
+		fcbArray[fd].index = 0;
+		readCount = readCount - actualCount;
+		fcbArray[fd].numBytesRead += actualCount;
+	}
+
+	// Read in blocks that can be read in full straight to user's buffer.
+	if (readCount / vcb->block_size > 0)
+	{
+		//printf("b_read: block 5\n");
 		int numBlocks = readCount / vcb->block_size;
-		if (numBlocks > 0)
+		int readRet = LBAread(buffer, numBlocks, fcbArray[fd].blockTracker);
+			//DEBUG statements
+		//printf("readCount:%d\nnumBlocks:%d\nreadRet:%d\n", readCount, numBlocks, readRet);
+		if (readRet != numBlocks)
 		{
-			// If you can just read numBlocks whole blocks directly from file to user's buffer
-			// without remaining bytes
-			if (numBlocks * vcb->block_size == readCount)
-			{
-				LBAread(buffer, numBlocks, fcbArray[fd].blockTracker);
-				fcbArray[fd].blockTracker += numBlocks;
-				fcbArray[fd].numBytesRead += (numBlocks * vcb->block_size);
-				actualCount += (numBlocks * vcb->block_size);
-				// but when does eof get triggered here?
-				if (fcbArray[fd].eof == 1)
-				{
-					printf("b_read: 1End of file reached.\n");
-					return 0;
-				}
-				else
-				{
-					return actualCount;
-				}
-			}
+			fprintf(stderr, "b_read: LBAread error 2.\n");
+			return -1;
 		}
 
-		// If there's a small amount of bytes left to read
-		else if (numBlocks == 0 && readCount > 0)
-		{
-			LBAread(fcbArray[fd].buf, 1, fcbArray[fd].blockTracker);
-			fcbArray[fd].blockTracker += 1;
+		fcbArray[fd].blockTracker += numBlocks;
+		// No changes needed to index, handled in previous if block.
+		actualCount += (vcb->block_size * numBlocks);
+		readCount = readCount - (vcb->block_size * numBlocks);
+		fcbArray[fd].numBytesRead += actualCount;
+	}
 
-			memcpy(buffer, fcbArray[fd].buf, readCount);
-			actualCount += readCount;
-			fcbArray[fd].index = readCount;
-			fcbArray[fd].numBytesRead += readCount;
-
-			if (fcbArray[fd].eof == 1)
-			{
-				printf("b_read: 2End of file reached.\n");
-				return actualCount;
-			}
-			else
-			{
-				return actualCount;
-			}
-		}
+	// Read in any leftover bytes needed after full block chunks.
+	if (readCount > 0)
+	{
+		//printf("b_read: block 6\n");
+		LBAread(fcbArray[fd].buf, 1, fcbArray[fd].blockTracker);
+		memcpy(buffer, fcbArray[fd].buf + fcbArray[fd].index, readCount);
+		fcbArray[fd].index += readCount;
+		actualCount += readCount;
+		readCount = readCount - readCount;
+		fcbArray[fd].numBytesRead += actualCount;
 	}
 
 	if (fcbArray[fd].eof == 1)
