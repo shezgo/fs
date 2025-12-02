@@ -627,11 +627,12 @@ int b_read(b_io_fd fd, char *buffer, int count)
 	// Check if the end of file will be reached with this call, trim readCount if needed.
 	if ((fcbArray[fd].numBytesRead + readCount) >= fcbArray[fd].fileSize)
 	{
-		printf("b_read block 1:fcbArray[fd].fileSize:%d\n", fcbArray[fd].fileSize);
+		//printf("b_read block 1:fcbArray[fd].fileSize:%d\n", fcbArray[fd].fileSize);
+		//printf("fd.fileSize:%d\nfd.numBytesRead:%d", fcbArray[fd].fileSize, fcbArray[fd].numBytesRead);
 		readCount = fcbArray[fd].fileSize - fcbArray[fd].numBytesRead;
 
 		fcbArray[fd].eof = 1;
-		printf("b_read: readCount trimmed from count:%d to %d\n", count, readCount);
+		//printf("b_read: readCount trimmed from count:%d to %d\n", count, readCount);
 		if (readCount == 0)
 		{
 			printf("b_read: End of file reached - nothing to read.\n");
@@ -662,11 +663,14 @@ int b_read(b_io_fd fd, char *buffer, int count)
 		return actualCount;
 	}
 
-	// If after clearing the current fd's buffer, more blocks may need to be read from disk.
+	// Clear the current fd's buffer. In following code blocks, more blocks may be read from disk.
 	if (readCount >= (vcb->block_size - fcbArray[fd].index))
 	{
 		//printf("b_read: block 4\n");
-		memcpy(buffer + actualCount, fcbArray[fd].buf + fcbArray[fd].index, (vcb->block_size - fcbArray[fd].index));
+		memcpy(buffer, fcbArray[fd].buf + fcbArray[fd].index, (vcb->block_size - fcbArray[fd].index));
+		//printf("fd.buf:\n%s", fcbArray[fd].buf);
+		//printf("\nbuffer:\n%s", buffer);
+		//printf("write size:%d\n", (vcb->block_size - fcbArray[fd].index));
 		fcbArray[fd].blockTracker++;
 		actualCount += (vcb->block_size - fcbArray[fd].index);
 		fcbArray[fd].index = 0;
@@ -679,7 +683,7 @@ int b_read(b_io_fd fd, char *buffer, int count)
 	{
 		//printf("b_read: block 5\n");
 		int numBlocks = readCount / vcb->block_size;
-		int readRet = LBAread(buffer, numBlocks, fcbArray[fd].blockTracker);
+		int readRet = LBAread(buffer + actualCount, numBlocks, fcbArray[fd].blockTracker);
 			//DEBUG statements
 		//printf("readCount:%d\nnumBlocks:%d\nreadRet:%d\n", readCount, numBlocks, readRet);
 		if (readRet != numBlocks)
@@ -700,11 +704,12 @@ int b_read(b_io_fd fd, char *buffer, int count)
 	{
 		//printf("b_read: block 6\n");
 		LBAread(fcbArray[fd].buf, 1, fcbArray[fd].blockTracker);
-		memcpy(buffer, fcbArray[fd].buf + fcbArray[fd].index, readCount);
+		memcpy(buffer + actualCount, fcbArray[fd].buf + fcbArray[fd].index, readCount);
 		fcbArray[fd].index += readCount;
+		fcbArray[fd].numBytesRead += readCount;
 		actualCount += readCount;
 		readCount = readCount - readCount;
-		fcbArray[fd].numBytesRead += actualCount;
+		
 	}
 
 	if (fcbArray[fd].eof == 1)
