@@ -147,9 +147,17 @@ int saveDir(DE *directory)
         fprintf(stderr, "Directory is null\n");
         return -1;
     }
-
-    int returnInt = LBAwrite(directory, directory->dirNumBlocks, directory->LBAlocation);
+    
+    int returnInt = LBAwrite(directory, directory[0].dirNumBlocks, directory[0].LBAlocation);
+    if(returnInt == directory[0].dirNumBlocks)
+    {
     return 1;
+    }
+    else
+    {
+        fprintf(stderr, "saveDir: LBAwrite failure.\n");
+        return -1;
+    }
 }
 
 //*************************************************************************************************
