@@ -52,7 +52,6 @@ typedef struct DE
 // so just pass in null and set parentIndex to -1.
 // initDir creates the directory and assigns it as a DE to its parent directory
 DE *initDir(int maxEntries, DE *parent, int parentIndex, char * ppile, Bitmap *bm);
-DE *loadDirDE(DE *dir); //loads a directory into memory
 DE *loadDirLBA(int numBlocks, int startBlock); //Creates and loads a dir into memory using LBA
 int updateDELBA(DE *dir); // Updates a DE on disk
 void *print5DEs(DE *dir); //Prints first 5 DEs from a directory

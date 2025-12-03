@@ -21,7 +21,7 @@
 //*************************************************************************************************
 // Helper functions
 //*************************************************************************************************
-// Returns index of the DE with name parameter in parent
+// Returns index of the DE with name parameter in parent. Returns index on success, -1 on failure.
 int findNameInDir(DE *parent, char *name)
 {
     if (parent == NULL)
@@ -99,9 +99,9 @@ int freeIfNotNeedDir(DE *dir)
 {
     if (dir != NULL)
     {
-        if (dir != cwdGlobal)
+        if (dir[0].LBAlocation != cwdGlobal[0].LBAlocation)
         {
-            if (dir != rootGlobal)
+            if (dir[0].LBAlocation != rootGlobal[0].LBAlocation)
             {
                 free(dir);
                 return 1;
@@ -250,6 +250,10 @@ int parsePath(char *passedPath, ppinfo *ppi)
             {
                 fprintf(stderr, "mfs.c:parsePath: parent[ppi->lei] is a file.\n");
                 ppi->isFile = 1;
+                return -1;
+            }
+            if(ppi->lei  == -1)
+            {
                 return -1;
             }
             return (0);
@@ -509,12 +513,36 @@ int fs_closedir(fdDir *dirp)
 int fs_setcwd(char *pathname)
 {
     ppinfo ppi;
+
+    if(strcmp(pathname, "..") == 0)
+    {
+        DE * newCwd = loadDirLBA(cwdGlobal[1].dirNumBlocks, cwdGlobal[1].LBAlocation);
+        if(cwdGlobal[0].LBAlocation != rootGlobal[0].LBAlocation)
+        {
+            free(cwdGlobal);
+        }
+        cwdGlobal = newCwd;
+        if(cwdGlobal[0].LBAlocation == rootGlobal[0].LBAlocation)
+        {
+            strcpy(cwdName, "/");
+            return 0;
+        }
+        strcpy(cwdName, cwdGlobal[0].name);
+        return 0;
+    }
+
+    if(strcmp(pathname, ".")== 0)
+    {
+        return 0;
+    }
+
+
     int parseFlag = parsePath(pathname, &ppi);
 
     // If parsePath fails, return error
     if (parseFlag == -1)
     {
-        fprintf(stderr, "Invalid pathname");
+        fprintf(stderr, "Invalid pathname\n");
         return (parseFlag);
     }
     // If parsePath resolves to root
@@ -527,14 +555,19 @@ int fs_setcwd(char *pathname)
 
     if (fs_isFile(pathname) == 1)
     {
-        fprintf(stderr, "Path is not a directory");
+        fprintf(stderr, "Path is not a directory\n");
         return -1;
     }
 
     // If the path is valid, update the current working directory.
     if (fs_isDir(pathname) == 1)
     {
-        cwdGlobal = &(ppi.parent[ppi.lei]);
+        if(cwdGlobal[0].LBAlocation != rootGlobal[0].LBAlocation)
+        {
+            free(cwdGlobal);
+        }
+        
+        cwdGlobal = loadDirLBA(ppi.parent[ppi.lei].dirNumBlocks, ppi.parent[ppi.lei].LBAlocation);
 
         if (pathname[0] == '/')
         {
@@ -550,7 +583,10 @@ int fs_setcwd(char *pathname)
         }
 
         strcpy(fullPath, cwdName);
-        strcat(fullPath, "/");
+        if(strcmp(fullPath, "/") != 0)
+        {
+            strcat(fullPath, "/");
+        }
         strcat(fullPath, pathname);
         strcpy(cwdName, fullPath);
 
