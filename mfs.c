@@ -217,13 +217,13 @@ int parsePath(char *passedPath, ppinfo *ppi)
 
     DE *parent = start;
     ppi->isFile = 0;
+    ppi->parentExists = -1;
 
     char *saveptr;
     char *token1 = strtok_r(path, "/", &saveptr);
     // Special case: If the only token is /, then it’ll return null
     if (token1 == NULL)
     {
-        printf("pp 1\n");
         if (path[0] != '/') // ensure the path is not root
         {
             return -1; // Invalid path
@@ -237,7 +237,6 @@ int parsePath(char *passedPath, ppinfo *ppi)
 
     do
     {
-        printf("pp loop: token1:%s \n", token1);
         ppi->le = token1;
         // if findNameInDir can't find token1, it returns -1 to ppi->lei.
         ppi->lei = findNameInDir(parent, token1);
@@ -247,7 +246,7 @@ int parsePath(char *passedPath, ppinfo *ppi)
         if (token2 == NULL)
         {
             ppi->parent = parent;
-
+            ppi->parentExists = 1;
             if (entryIsFile(parent, ppi->lei) == 1)
             {
                 fprintf(stderr, "mfs.c:parsePath: parent[ppi->lei] is a file.\n");
@@ -317,97 +316,30 @@ int fs_mkdir(const char *path, mode_t mode)
     }
 
     // Create a writable copy of the path
-    char *pathCopy = malloc(CWD_SIZE);
-    if (pathCopy == NULL)
-    {
-        fprintf(stderr, "path is null\n");
-        return -1;
-    }
-    strcpy(pathCopy, path); // duplicates string, allocates memory
-
+    char *pathCopy = strdup(path);
     if (pathCopy == NULL)
     {
         fprintf(stderr, "Failed to duplicate path\n");
         return -1;
     }
-
-    /*
-    New strategy.
-    Keep pulling tokens. When the next token is NULL, find the
-    length of the last token. Use that to find index for '\0'
-    to create a trimmed path.
-
-    Edge case: pathCopy == "/" then just run parsePath on pathCopy.
-    */
-
-    char *lastElement;
-    char trimmedPath[CWD_SIZE];
-    trimmedPath[0]='\0';
-
-    //If pathCopy is not just /
-    if (strcmp(pathCopy, "/") != 0)
-    {
-        int skipScrollFlag = 0;//If there's only 1 element, this will be set to 1.
-        char *saveptr;
-
-        
-        if(pathCopy[0] == '/')
-        {
-            strcat(trimmedPath, "/");
-        }
-
-        char *token1 = strtok_r(pathCopy, "/", &saveptr);
-        char *token2 = strtok_r(NULL, "/", &saveptr);
-
-
-        if (token2 == NULL)
-        {
-            skipScrollFlag = 1;
-            if(pathCopy[0] != '/' && token1 != NULL)
-            {
-                strcat(trimmedPath, "/"); //Ensure that "/" is the path passed to parsePath
-                printf("fs_mkdir: token1:%s\ntrimmedPath: %s\n", token1, trimmedPath);
-            }
-        }
-
-        if (skipScrollFlag == 0)
-        {
-            int oneSlash = 0;
-            while (token2 != NULL)
-            {
-                if(oneSlash ==1)
-                {
-                    strcat(trimmedPath, "/");
-                }
-                token1 = token2;
-                strcat(trimmedPath, token1);
-                token2 = strtok_r(NULL, "/", &saveptr);
-                oneSlash = 1;
-            }
-        }
-        lastElement = token1;
-    }
-
     ppinfo ppi;
-    int parseFlag = parsePath(trimmedPath, &ppi);
+    int parseFlag = parsePath(pathCopy, &ppi);
     // free(pathCopy); //this statement alters ppi.le for some reason
     //  If parsePath fails
-    if (parseFlag != 0 && parseFlag != -2)
+    if (parseFlag != 0 && ppi.parentExists != 1)
     {
-        fprintf(stderr, "fs_mkdir: parsePath failed\n");
+        fprintf(stderr, "parsePath failed\n");
         return (parseFlag);
     }
 
-    DE *parentDir = loadDirLBA(ppi.parent[ppi.lei].dirNumBlocks,ppi.parent[ppi.lei].LBAlocation);
     // If ppi.lei is not -1, then the directory already exists. Return 2.
-    
-    int index = findNameInDir(parentDir, lastElement);
-    if (index != -1)
+    if (ppi.lei != -1)
     {
-        fprintf(stderr, "fs_mkdir: Directory already exists.\n");
+        fprintf(stderr, "Directory already exists\n");
+        return (2);
     }
-    
-    int x = findUnusedDE(parentDir);
+
+    int x = findUnusedDE(ppi.parent);
 
     if (x == -1)
     {
@@ -415,7 +347,7 @@ int fs_mkdir(const char *path, mode_t mode)
         return -1;
     }
 
-    DE *newDir = initDir(MAX_ENTRIES, parentDir, x, lastElement, bm);
+    DE *newDir = initDir(MAX_ENTRIES, ppi.parent, x, ppi.le, bm);
 
     if (newDir == NULL)
     {
