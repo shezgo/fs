@@ -85,7 +85,7 @@ typedef struct ppinfo
 	char * le; //last element for parsePath
 	int lei; //last element index for parsePath - used to access the actual DE as parent[lei]
 	int isFile; //Is 1 if parent[lei] is a file.
-	int parentExists;
+	int parentExists; //Is 1 in case lei is -1, but ppi still contains the parent of the le
 }ppinfo;
 
 // Key directory functions

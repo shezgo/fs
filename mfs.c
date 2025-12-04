@@ -239,7 +239,15 @@ int parsePath(char *passedPath, ppinfo *ppi)
     {
         ppi->le = token1;
         // if findNameInDir can't find token1, it returns -1 to ppi->lei.
-        ppi->lei = findNameInDir(parent, token1);
+        if(strcmp(token1, "..") == 0)
+        {
+            ppi->lei = 1;
+            ppi->le = parent[0].name;
+        }
+        else
+        {
+            ppi->lei = findNameInDir(parent, token1);
+        }
         token2 = strtok_r(NULL, "/", &saveptr);
         // Success: If token2 is null then token1 is the last element.
         // If token2 is not null, that tells you token1 has to exist and must be a directory.
