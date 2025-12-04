@@ -147,11 +147,11 @@ int saveDir(DE *directory)
         fprintf(stderr, "Directory is null\n");
         return -1;
     }
-    
+
     int returnInt = LBAwrite(directory, directory[0].dirNumBlocks, directory[0].LBAlocation);
-    if(returnInt == directory[0].dirNumBlocks)
+    if (returnInt == directory[0].dirNumBlocks)
     {
-    return 1;
+        return 1;
     }
     else
     {
@@ -204,6 +204,7 @@ int parsePath(char *passedPath, ppinfo *ppi)
         else
         {
             fprintf(stderr, "Root is null\n");
+            return -1;
         }
     }
     else
@@ -222,6 +223,7 @@ int parsePath(char *passedPath, ppinfo *ppi)
     // Special case: If the only token is /, then it’ll return null
     if (token1 == NULL)
     {
+        printf("pp 1\n");
         if (path[0] != '/') // ensure the path is not root
         {
             return -1; // Invalid path
@@ -235,12 +237,12 @@ int parsePath(char *passedPath, ppinfo *ppi)
 
     do
     {
+        printf("pp loop: token1:%s \n", token1);
         ppi->le = token1;
-
         // if findNameInDir can't find token1, it returns -1 to ppi->lei.
         ppi->lei = findNameInDir(parent, token1);
         token2 = strtok_r(NULL, "/", &saveptr);
-// Success: If token2 is null then token1 is the last element.
+        // Success: If token2 is null then token1 is the last element.
         // If token2 is not null, that tells you token1 has to exist and must be a directory.
         if (token2 == NULL)
         {
@@ -252,8 +254,9 @@ int parsePath(char *passedPath, ppinfo *ppi)
                 ppi->isFile = 1;
                 return -1;
             }
-            if(ppi->lei  == -1)
+            if (ppi->lei == -1)
             {
+                fprintf(stderr, "parsePath: ppi->lei is -1.\n");
                 return -1;
             }
             return (0);
@@ -314,30 +317,97 @@ int fs_mkdir(const char *path, mode_t mode)
     }
 
     // Create a writable copy of the path
-    char *pathCopy = strdup(path);
+    char *pathCopy = malloc(CWD_SIZE);
+    if (pathCopy == NULL)
+    {
+        fprintf(stderr, "path is null\n");
+        return -1;
+    }
+    strcpy(pathCopy, path); // duplicates string, allocates memory
+
     if (pathCopy == NULL)
     {
         fprintf(stderr, "Failed to duplicate path\n");
         return -1;
     }
+
+    /*
+    New strategy.
+    Keep pulling tokens. When the next token is NULL, find the
+    length of the last token. Use that to find index for '\0'
+    to create a trimmed path.
+
+    Edge case: pathCopy == "/" then just run parsePath on pathCopy.
+    */
+
+    char *lastElement;
+    char trimmedPath[CWD_SIZE];
+    trimmedPath[0]='\0';
+
+    //If pathCopy is not just /
+    if (strcmp(pathCopy, "/") != 0)
+    {
+        int skipScrollFlag = 0;//If there's only 1 element, this will be set to 1.
+        char *saveptr;
+
+        
+        if(pathCopy[0] == '/')
+        {
+            strcat(trimmedPath, "/");
+        }
+
+        char *token1 = strtok_r(pathCopy, "/", &saveptr);
+        char *token2 = strtok_r(NULL, "/", &saveptr);
+
+
+        if (token2 == NULL)
+        {
+            skipScrollFlag = 1;
+            if(pathCopy[0] != '/' && token1 != NULL)
+            {
+                strcat(trimmedPath, "/"); //Ensure that "/" is the path passed to parsePath
+                printf("fs_mkdir: token1:%s\ntrimmedPath: %s\n", token1, trimmedPath);
+            }
+        }
+
+        if (skipScrollFlag == 0)
+        {
+            int oneSlash = 0;
+            while (token2 != NULL)
+            {
+                if(oneSlash ==1)
+                {
+                    strcat(trimmedPath, "/");
+                }
+                token1 = token2;
+                strcat(trimmedPath, token1);
+                token2 = strtok_r(NULL, "/", &saveptr);
+                oneSlash = 1;
+            }
+        }
+        lastElement = token1;
+    }
+
     ppinfo ppi;
-    int parseFlag = parsePath(pathCopy, &ppi);
+    int parseFlag = parsePath(trimmedPath, &ppi);
     // free(pathCopy); //this statement alters ppi.le for some reason
     //  If parsePath fails
-    if (parseFlag != 0)
+    if (parseFlag != 0 && parseFlag != -2)
     {
-        fprintf(stderr, "parsePath failed\n");
+        fprintf(stderr, "fs_mkdir: parsePath failed\n");
         return (parseFlag);
     }
 
+    DE *parentDir = loadDirLBA(ppi.parent[ppi.lei].dirNumBlocks,ppi.parent[ppi.lei].LBAlocation);
     // If ppi.lei is not -1, then the directory already exists. Return 2.
-    if (ppi.lei != -1)
+    
+    int index = findNameInDir(parentDir, lastElement);
+    if (index != -1)
     {
-        fprintf(stderr, "Directory already exists\n");
-        return (2);
+        fprintf(stderr, "fs_mkdir: Directory already exists.\n");
     }
-
-    int x = findUnusedDE(ppi.parent);
+    
+    int x = findUnusedDE(parentDir);
 
     if (x == -1)
     {
@@ -345,7 +415,7 @@ int fs_mkdir(const char *path, mode_t mode)
         return -1;
     }
 
-    DE *newDir = initDir(MAX_ENTRIES, ppi.parent, x, ppi.le, bm);
+    DE *newDir = initDir(MAX_ENTRIES, parentDir, x, lastElement, bm);
 
     if (newDir == NULL)
     {
@@ -514,15 +584,15 @@ int fs_setcwd(char *pathname)
 {
     ppinfo ppi;
 
-    if(strcmp(pathname, "..") == 0)
+    if (strcmp(pathname, "..") == 0)
     {
-        DE * newCwd = loadDirLBA(cwdGlobal[1].dirNumBlocks, cwdGlobal[1].LBAlocation);
-        if(cwdGlobal[0].LBAlocation != rootGlobal[0].LBAlocation)
+        DE *newCwd = loadDirLBA(cwdGlobal[1].dirNumBlocks, cwdGlobal[1].LBAlocation);
+        if (cwdGlobal[0].LBAlocation != rootGlobal[0].LBAlocation)
         {
             free(cwdGlobal);
         }
         cwdGlobal = newCwd;
-        if(cwdGlobal[0].LBAlocation == rootGlobal[0].LBAlocation)
+        if (cwdGlobal[0].LBAlocation == rootGlobal[0].LBAlocation)
         {
             strcpy(cwdName, "/");
             return 0;
@@ -531,11 +601,10 @@ int fs_setcwd(char *pathname)
         return 0;
     }
 
-    if(strcmp(pathname, ".")== 0)
+    if (strcmp(pathname, ".") == 0)
     {
         return 0;
     }
-
 
     int parseFlag = parsePath(pathname, &ppi);
 
@@ -562,11 +631,11 @@ int fs_setcwd(char *pathname)
     // If the path is valid, update the current working directory.
     if (fs_isDir(pathname) == 1)
     {
-        if(cwdGlobal[0].LBAlocation != rootGlobal[0].LBAlocation)
+        if (cwdGlobal[0].LBAlocation != rootGlobal[0].LBAlocation)
         {
             free(cwdGlobal);
         }
-        
+
         cwdGlobal = loadDirLBA(ppi.parent[ppi.lei].dirNumBlocks, ppi.parent[ppi.lei].LBAlocation);
 
         if (pathname[0] == '/')
@@ -583,7 +652,7 @@ int fs_setcwd(char *pathname)
         }
 
         strcpy(fullPath, cwdName);
-        if(strcmp(fullPath, "/") != 0)
+        if (strcmp(fullPath, "/") != 0)
         {
             strcat(fullPath, "/");
         }
@@ -748,7 +817,7 @@ int fs_delete(char *filename)
         }
         // Calculate how many blocks the file takes up.
         int numBlocks = (cwdGlobal[x].size + vcb->block_size - 1) / vcb->block_size;
-        if(numBlocks < 10)
+        if (numBlocks < 10)
         {
             numBlocks = 10;
         }
@@ -757,7 +826,7 @@ int fs_delete(char *filename)
         if (writeReturn == numBlocks)
         {
             fsRelease(bm, cwdGlobal[x].LBAlocation, numBlocks);
-        
+
             cwdGlobal[x].LBAlocation = -1; // DEs where i >=2 have starting locations of directories/files
             cwdGlobal[x].size = -1;
             for (int i = 0; i < NAME + 1; i++)
@@ -889,7 +958,7 @@ int fs_rmdir(const char *pathname)
         if (writeRet == ppi.parent[ppi.lei].dirNumBlocks)
         {
             fsRelease(bm, dir[0].LBAlocation, dir[0].dirNumBlocks);
-        
+
             // Reset DE values at ppi.parent[ppi.lei]
             ppi.parent[ppi.lei].LBAlocation = -1; // DEs where i >=2 have starting locations of directories/files
             ppi.parent[ppi.lei].size = -1;
