@@ -176,9 +176,17 @@ int parsePath(char *passedPath, ppinfo *ppi)
 {
     if (passedPath == NULL)
     {
-        fprintf(stderr, "passedPath is null\n");
+        fprintf(stderr, "parsePath: passedPath is null\n");
         return -1;
     }
+    if (ppi == NULL)
+    {
+        fprintf(stderr, "parsePath: ppi is null\n");
+        return -1;
+    }
+
+    ppi->elementCounter = 0;
+
     char *path = malloc(CWD_SIZE);
     if (path == NULL)
     {
@@ -200,6 +208,8 @@ int parsePath(char *passedPath, ppinfo *ppi)
         if (rootGlobal != NULL)
         {
             start = rootGlobal;
+            strcpy(ppi->pathArray[ppi->elementCounter], "/");
+            ppi->elementCounter++;
         }
         else
         {
@@ -212,6 +222,8 @@ int parsePath(char *passedPath, ppinfo *ppi)
         if (cwdGlobal != NULL)
         {
             start = cwdGlobal;
+            strcpy(ppi->pathArray[ppi->elementCounter], cwdName);
+            ppi->elementCounter++;
         }
     }
 
@@ -233,13 +245,17 @@ int parsePath(char *passedPath, ppinfo *ppi)
         ppi->lei = 0; // this means path is root
         return -2;    // Unique return val for root path
     }
+
+    strcpy(ppi->pathArray[ppi->elementCounter], token1);
+    ppi->elementCounter++;
+
     char *token2;
 
     do
     {
         ppi->le = token1;
         // if findNameInDir can't find token1, it returns -1 to ppi->lei.
-        if(strcmp(token1, "..") == 0)
+        if (strcmp(token1, "..") == 0)
         {
             ppi->lei = 1;
             ppi->le = parent[0].name;
@@ -268,6 +284,9 @@ int parsePath(char *passedPath, ppinfo *ppi)
             }
             return (0);
         }
+
+        strcpy(ppi->pathArray[ppi->elementCounter], token2);
+        ppi->elementCounter++;
 
         // This triggers if at any point in the path, an element doesn't exist
         if (ppi->lei < 0) // the name doesn’t exist, invalid path
@@ -308,6 +327,64 @@ int parsePath(char *passedPath, ppinfo *ppi)
     // if the index is invalid, exit
     // If the index was valid but not a directory, exit.
     // If it was, then valid!
+}
+
+char *resolvePath(char pathArray[][NAME + 1], int numElems)
+{
+
+
+    /*
+        First, resolve the . and ..fields in the pathname.
+        If an element is ., change that element to '\0' 
+        which we'll skip later.
+        If an element is .., change that element AND its previous 
+        element to '\0' and skip both later.
+    */
+   for (int i = 1; i < numElems; i++)
+   {
+    if(strcmp(pathArray[i], ".") == 0)
+    {
+        pathArray[i][0] = '\0';
+    }
+    if(strcmp(pathArray[i], "..") == 0)
+    {
+        pathArray[i][0] = '\0';
+        pathArray[i-1][0] = '\0';
+        /*
+            DEBUG ^ This will not work if i = 1 and pathArray[0]
+            is a full cwd or has multiple / characters in it.
+            We'd need to tokenize cwd and remove the last element.
+        */
+    }
+   }
+
+    /*
+        Initialize a c string resolvedPath of size CWD_SIZE
+        Iterate through all numElems elements in pathArray
+        for(int i = 0; i < numElems; i++
+        {
+        strcat each element
+        If pathArray[prevElem][strlen(pathArray[prevElem])] != '/'
+        {
+        strcat(resolvedPath, "/");
+        }
+        strcat(resolvedPath, pathArray[currentelem]
+        }
+    */
+
+   //This builds the string, but does not resolve the elements in the array.
+    char resolvedPath[CWD_SIZE];
+    resolvedPath[0] = '\0';
+    strcat(resolvedPath, pathArray[0]);
+    for (int i = 1; i < numElems; i++)
+    {
+
+        if (pathArray[i - 1][strlen(pathArray[i-1])] != '/')
+        {
+            strcat(resolvedPath, "/");
+        }
+        strcat(resolvedPath, pathArray[i]);
+    }
 }
 
 //*************************************************************************************************
@@ -547,6 +624,10 @@ int fs_setcwd(char *pathname)
     }
 
     int parseFlag = parsePath(pathname, &ppi);
+    for (int i = 0; i < ppi.elementCounter; i++)
+    {
+        printf("pathArray[%d]:%s\n", i, ppi.pathArray[i]);
+    }
 
     // If parsePath fails, return error
     if (parseFlag == -1)
@@ -567,6 +648,8 @@ int fs_setcwd(char *pathname)
         fprintf(stderr, "Path is not a directory\n");
         return -1;
     }
+
+    char *resolvedPath = resolvePath(ppi.pathArray, ppi.elementCounter);
 
     // If the path is valid, update the current working directory.
     if (fs_isDir(pathname) == 1)
