@@ -1,5 +1,5 @@
 Note - while this reads as a group project, this was completed by @shezgo independently (and is still receiving updates).
-Thanks for looking! Interviews and feedback are very welcome <3
+Thanks for looking! Interviews and feedback are very welcome and appreciated.
 Contact: shezpc@gmail.com
 
 # CSC415 Group Term Assignment - File System
@@ -186,6 +186,7 @@ What needs to be submitted (via GitHub):
 	* Screen shots showing each of the commands listed above
 * 	Your volume file (limit 10MB)
 *  There will also be an INDIVIDUAL report (form) to complete.
+
 
 
 
