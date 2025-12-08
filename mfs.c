@@ -185,7 +185,7 @@ int parsePath(char *passedPath, ppinfo *ppi)
         return -1;
     }
 
-    ppi->elementCounter = 0;
+    ppi->maxElemIndex = -1;
 
     char *path = malloc(CWD_SIZE);
     if (path == NULL)
@@ -208,8 +208,9 @@ int parsePath(char *passedPath, ppinfo *ppi)
         if (rootGlobal != NULL)
         {
             start = rootGlobal;
-            strcpy(ppi->pathArray[ppi->elementCounter], "/");
-            ppi->elementCounter++;
+            ppi->maxElemIndex++;
+            strcpy(ppi->pathArray[ppi->maxElemIndex], "/");
+            
         }
         else
         {
@@ -222,8 +223,9 @@ int parsePath(char *passedPath, ppinfo *ppi)
         if (cwdGlobal != NULL)
         {
             start = cwdGlobal;
-            strcpy(ppi->pathArray[ppi->elementCounter], cwdName);
-            ppi->elementCounter++;
+            ppi->maxElemIndex++;
+            strcpy(ppi->pathArray[ppi->maxElemIndex], cwdName);
+            
         }
     }
 
@@ -245,9 +247,8 @@ int parsePath(char *passedPath, ppinfo *ppi)
         ppi->lei = 0; // this means path is root
         return -2;    // Unique return val for root path
     }
-
-    strcpy(ppi->pathArray[ppi->elementCounter], token1);
-    ppi->elementCounter++;
+    ppi->maxElemIndex++;
+    strcpy(ppi->pathArray[ppi->maxElemIndex], token1);
 
     char *token2;
 
@@ -259,6 +260,20 @@ int parsePath(char *passedPath, ppinfo *ppi)
         {
             ppi->lei = 1;
             ppi->le = parent[0].name;
+            
+            //If it's .., then do not add a new element, AND subtract the last element.
+            
+            if(ppi->maxElemIndex != 0 && strcmp(ppi->pathArray[ppi->maxElemIndex], "/") != 0)
+            {
+                ppi->pathArray[ppi->maxElemIndex][0] = '\0';
+                ppi->maxElemIndex--;
+            }
+            else
+            {
+                strcpy(ppi->le, "/");
+                ppi->lei = 0;
+            }
+            
         }
         else
         {
@@ -285,15 +300,17 @@ int parsePath(char *passedPath, ppinfo *ppi)
             return (0);
         }
 
-        strcpy(ppi->pathArray[ppi->elementCounter], token2);
-        ppi->elementCounter++;
-
         // This triggers if at any point in the path, an element doesn't exist
         if (ppi->lei < 0) // the name doesn’t exist, invalid path
         {
             fprintf(stderr, "Invalid path\n");
             return -1;
         }
+
+        //Add token1 to the pathArray here. It could be a dir or file, but exists either way.
+        ppi->maxElemIndex++;
+        strcpy(ppi->pathArray[ppi->maxElemIndex], token1);
+
 
         // Helper function EntryisDir - if parent[ppi->lei] is NOT a directory, error?
         if (entryIsDir(parent, ppi->lei) == 0 && entryIsFile(parent, ppi->lei) != 1)
@@ -349,7 +366,10 @@ char *resolvePath(char pathArray[][NAME + 1], int numElems)
     if(strcmp(pathArray[i], "..") == 0)
     {
         pathArray[i][0] = '\0';
-        pathArray[i-1][0] = '\0';
+        if(strcmp(pathArray[i-1], "/") != 0)
+        {
+            pathArray[i-1][0] = '\0';
+        }
         /*
             DEBUG ^ This will not work if i = 1 and pathArray[0]
             is a full cwd or has multiple / characters in it.
