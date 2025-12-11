@@ -194,7 +194,7 @@ int parsePath(char *passedPath, ppinfo *ppi)
         return -1;
     }
     strcpy(path, passedPath); // duplicates string, allocates memory
-
+    printf("parsePath begin: path: %s\n", path);
     if (path == NULL)
     {
         perror("strcpy failed");
@@ -205,12 +205,12 @@ int parsePath(char *passedPath, ppinfo *ppi)
 
     if (path[0] == '/')
     {
+
         if (rootGlobal != NULL)
         {
             start = rootGlobal;
-            ppi->maxElemIndex++;
+            ppi->maxElemIndex = 0; // increments to 0.
             strcpy(ppi->pathArray[ppi->maxElemIndex], "/");
-            
         }
         else
         {
@@ -220,12 +220,66 @@ int parsePath(char *passedPath, ppinfo *ppi)
     }
     else
     {
+
+        // DEBUG: 
+        // Needs to check:
+        // 1. if maxElemIndex > MAX_ELEMENTS every time
+        // maxElemIndex is incremented.
+        // 2. if strlen(tok) < NAME
+
+        // This block tokenizes the current working directory.
         if (cwdGlobal != NULL)
         {
             start = cwdGlobal;
-            ppi->maxElemIndex++;
-            strcpy(ppi->pathArray[ppi->maxElemIndex], cwdName);
-            
+            ppi->maxElemIndex = 0; // increments to 0.
+            strcpy(ppi->pathArray[ppi->maxElemIndex], "/");
+
+            /*
+            Tokenize cwdName and add it to ppi->pathArray
+            */
+
+            char nameDupe[strlen(cwdName) + 1];
+            nameDupe[0] = '\0';
+            strcpy(nameDupe, cwdName);
+
+            char *sp;
+
+            char *tok = strtok_r(nameDupe, "/", &sp);
+
+            if (strcmp(nameDupe, "/") == 0 && tok == NULL)
+            {
+                tok = "/";
+            }
+
+            if (strcmp(tok, "/") != 0)
+            {
+                ppi->maxElemIndex++;
+                strcpy(ppi->pathArray[ppi->maxElemIndex], tok);
+            }
+
+            do
+            {
+
+                tok = strtok_r(NULL, "/", &sp);
+                if (tok == NULL)
+                {
+                    break;
+                }
+                else
+                {
+                    ppi->maxElemIndex++;
+                    strcpy(ppi->pathArray[ppi->maxElemIndex], tok);
+                }
+            } while (tok != NULL);
+        }
+
+        else
+        {
+            fprintf(stderr, "parsePath: relative path but no cwd is initialized.\n");
+        }
+        for (int i = 0; i <= ppi->maxElemIndex; i++)
+        {
+            printf("parsePath1:pathArray[%d]:%s\n", i, ppi->pathArray[i]);
         }
     }
 
@@ -234,8 +288,10 @@ int parsePath(char *passedPath, ppinfo *ppi)
     ppi->parentExists = -1;
 
     char *saveptr;
+    printf("before first strtok_r: path:%s\n", path);
     char *token1 = strtok_r(path, "/", &saveptr);
     // Special case: If the only token is /, then it’ll return null
+
     if (token1 == NULL)
     {
         if (path[0] != '/') // ensure the path is not root
@@ -243,47 +299,60 @@ int parsePath(char *passedPath, ppinfo *ppi)
             return -1; // Invalid path
         }
         ppi->parent = parent;
-        ppi->le = NULL;
+        ppi->le[0] = '\0';
         ppi->lei = 0; // this means path is root
         return -2;    // Unique return val for root path
     }
     ppi->maxElemIndex++;
     strcpy(ppi->pathArray[ppi->maxElemIndex], token1);
-
+    for (int i = 0; i <= ppi->maxElemIndex; i++)
+    {
+        printf("parsePath2:pathArray[%d]:%s\n", i, ppi->pathArray[i]);
+    }
     char *token2;
 
     do
     {
-        ppi->le = token1;
+        printf("parsepath0: token1: %s\n", token1);
+        ppi->le[0] = '\0';
+        strcpy(ppi->le, token1);
+        printf("parsepath1: token1: %s\n", token1);
         // if findNameInDir can't find token1, it returns -1 to ppi->lei.
         if (strcmp(token1, "..") == 0)
         {
+            printf("parsePath 1\n");
             ppi->lei = 1;
-            ppi->le = parent[0].name;
-            
-            //If it's .., then do not add a new element, AND subtract the last element.
-            
-            if(ppi->maxElemIndex != 0 && strcmp(ppi->pathArray[ppi->maxElemIndex], "/") != 0)
+            if(ppi->maxElemIndex >=2)
             {
+                printf("parsePath 1.5\n");
+                strcpy(ppi->le, ppi->pathArray[ppi->maxElemIndex - 2]);
                 ppi->pathArray[ppi->maxElemIndex][0] = '\0';
-                ppi->maxElemIndex--;
+                ppi->pathArray[ppi->maxElemIndex-1][0] = '\0';
+                ppi->maxElemIndex = ppi->maxElemIndex - 2;
             }
             else
             {
+                            printf("parsePath 2\n");
                 strcpy(ppi->le, "/");
+                ppi->maxElemIndex = 0;
                 ppi->lei = 0;
             }
-            
+
         }
+
         else
         {
+                   
+                        printf("parsepath 3: token1: %s\n", token1);
             ppi->lei = findNameInDir(parent, token1);
         }
         token2 = strtok_r(NULL, "/", &saveptr);
+        printf("parsepath: token2:%s\n", token2);
         // Success: If token2 is null then token1 is the last element.
         // If token2 is not null, that tells you token1 has to exist and must be a directory.
         if (token2 == NULL)
         {
+            printf("parsePath 4\n");
             ppi->parent = parent;
             ppi->parentExists = 1;
             if (entryIsFile(parent, ppi->lei) == 1)
@@ -294,9 +363,11 @@ int parsePath(char *passedPath, ppinfo *ppi)
             }
             if (ppi->lei == -1)
             {
+                            printf("parsePath 5\n");
                 fprintf(stderr, "parsePath: ppi->lei is -1.\n");
                 return -1;
             }
+            printf("parsepath 6");
             return (0);
         }
 
@@ -307,10 +378,12 @@ int parsePath(char *passedPath, ppinfo *ppi)
             return -1;
         }
 
-        //Add token1 to the pathArray here. It could be a dir or file, but exists either way.
-        ppi->maxElemIndex++;
-        strcpy(ppi->pathArray[ppi->maxElemIndex], token1);
-
+        if (strcmp(token1, ".") != 0)
+        {
+            // Add token1 to the pathArray here. It could be a dir or file, but exists either way.
+            ppi->maxElemIndex++;
+            strcpy(ppi->pathArray[ppi->maxElemIndex], token1);
+        }
 
         // Helper function EntryisDir - if parent[ppi->lei] is NOT a directory, error?
         if (entryIsDir(parent, ppi->lei) == 0 && entryIsFile(parent, ppi->lei) != 1)
@@ -346,65 +419,41 @@ int parsePath(char *passedPath, ppinfo *ppi)
     // If it was, then valid!
 }
 
-char *resolvePath(char pathArray[][NAME + 1], int numElems)
+char *resolvePath(char pathArray[][NAME + 1], int maxIndex)
 {
-
-
     /*
-        First, resolve the . and ..fields in the pathname.
-        If an element is ., change that element to '\0' 
-        which we'll skip later.
-        If an element is .., change that element AND its previous 
-        element to '\0' and skip both later.
-    */
-   for (int i = 1; i < numElems; i++)
-   {
-    if(strcmp(pathArray[i], ".") == 0)
-    {
-        pathArray[i][0] = '\0';
-    }
-    if(strcmp(pathArray[i], "..") == 0)
-    {
-        pathArray[i][0] = '\0';
-        if(strcmp(pathArray[i-1], "/") != 0)
-        {
-            pathArray[i-1][0] = '\0';
-        }
-        /*
-            DEBUG ^ This will not work if i = 1 and pathArray[0]
-            is a full cwd or has multiple / characters in it.
-            We'd need to tokenize cwd and remove the last element.
+            Initialize a c string resolvedPath of size CWD_SIZE
+            Iterate through all numElems elements in pathArray
+            for(int i = 0; i < numElems; i++
+            {
+            strcat each element
+            If pathArray[prevElem][strlen(pathArray[prevElem])] != '/'
+            {
+            strcat(resolvedPath, "/");
+            }
+            strcat(resolvedPath, pathArray[currentelem]
+            }
         */
+
+    // This builds the string, but does not resolve the elements in the array.
+    char *resolvedPath = malloc(CWD_SIZE);
+    if (resolvedPath == NULL)
+    {
+        fprintf(stderr, "resolvePath malloc failed.\n");
+        return NULL;
     }
-   }
-
-    /*
-        Initialize a c string resolvedPath of size CWD_SIZE
-        Iterate through all numElems elements in pathArray
-        for(int i = 0; i < numElems; i++
-        {
-        strcat each element
-        If pathArray[prevElem][strlen(pathArray[prevElem])] != '/'
-        {
-        strcat(resolvedPath, "/");
-        }
-        strcat(resolvedPath, pathArray[currentelem]
-        }
-    */
-
-   //This builds the string, but does not resolve the elements in the array.
-    char resolvedPath[CWD_SIZE];
     resolvedPath[0] = '\0';
     strcat(resolvedPath, pathArray[0]);
-    for (int i = 1; i < numElems; i++)
+    strcat(resolvedPath, pathArray[1]);
+    for (int i = 2; i <= maxIndex; i++)
     {
-
-        if (pathArray[i - 1][strlen(pathArray[i-1])] != '/')
+        if (pathArray[i] != NULL)
         {
             strcat(resolvedPath, "/");
+            strcat(resolvedPath, pathArray[i]);
         }
-        strcat(resolvedPath, pathArray[i]);
     }
+    return resolvedPath;
 }
 
 //*************************************************************************************************
@@ -621,32 +670,19 @@ int fs_setcwd(char *pathname)
 {
     ppinfo ppi;
 
-    if (strcmp(pathname, "..") == 0)
+    if (pathname == NULL)
     {
-        DE *newCwd = loadDirLBA(cwdGlobal[1].dirNumBlocks, cwdGlobal[1].LBAlocation);
-        if (cwdGlobal[0].LBAlocation != rootGlobal[0].LBAlocation)
-        {
-            free(cwdGlobal);
-        }
-        cwdGlobal = newCwd;
-        if (cwdGlobal[0].LBAlocation == rootGlobal[0].LBAlocation)
-        {
-            strcpy(cwdName, "/");
-            return 0;
-        }
-        strcpy(cwdName, cwdGlobal[0].name);
-        return 0;
+        fprintf(stderr, "fs_setcwd: pathname is NULL.\n");
     }
-
     if (strcmp(pathname, ".") == 0)
     {
         return 0;
     }
 
     int parseFlag = parsePath(pathname, &ppi);
-    for (int i = 0; i < ppi.elementCounter; i++)
+    for (int i = 0; i <= ppi.maxElemIndex; i++)
     {
-        printf("pathArray[%d]:%s\n", i, ppi.pathArray[i]);
+        printf("fs_setcwd:pathArray[%d]:%s\n", i, ppi.pathArray[i]);
     }
 
     // If parsePath fails, return error
@@ -669,7 +705,32 @@ int fs_setcwd(char *pathname)
         return -1;
     }
 
-    char *resolvedPath = resolvePath(ppi.pathArray, ppi.elementCounter);
+    if (strcmp(pathname, "..") == 0)
+    {
+        DE *newCwd = loadDirLBA(cwdGlobal[1].dirNumBlocks, cwdGlobal[1].LBAlocation);
+        if (cwdGlobal[0].LBAlocation != rootGlobal[0].LBAlocation)
+        {
+            free(cwdGlobal);
+        }
+        cwdGlobal = newCwd;
+        if (cwdGlobal[0].LBAlocation == rootGlobal[0].LBAlocation)
+        {
+            strcpy(cwdName, "/");
+            return 0;
+        }
+        //Trim the last element from ppi.pathArray? or just let resolvePath handle
+        //PICKUP HERE
+        strcpy(cwdName, cwdGlobal[0].name);
+        return 0;
+    }
+
+    char *resolvedPath = resolvePath(ppi.pathArray, ppi.maxElemIndex);
+
+    if (resolvedPath == NULL)
+    {
+        fprintf(stderr, "fs_setcwd: resolvePath failed.\n");
+        return -1;
+    }
 
     // If the path is valid, update the current working directory.
     if (fs_isDir(pathname) == 1)
@@ -681,29 +742,15 @@ int fs_setcwd(char *pathname)
 
         cwdGlobal = loadDirLBA(ppi.parent[ppi.lei].dirNumBlocks, ppi.parent[ppi.lei].LBAlocation);
 
-        if (pathname[0] == '/')
-        {
-            strcpy(cwdName, pathname);
-            return 0;
-        }
+        strcpy(cwdName, resolvedPath);
+        free(resolvedPath);
 
-        char *fullPath = malloc(CWD_SIZE);
-        if (fullPath == NULL)
-        {
-            fprintf(stderr, "fullPath malloc failed.\n");
-            return -1;
-        }
-
-        strcpy(fullPath, cwdName);
-        if (strcmp(fullPath, "/") != 0)
-        {
-            strcat(fullPath, "/");
-        }
-        strcat(fullPath, pathname);
-        strcpy(cwdName, fullPath);
-
-        free(fullPath);
         return 0;
+    }
+    else
+    {
+        fprintf(stderr, "fs_setcwd: path is not a directory.\n");
+        return -1;
     }
 }
 //*************************************************************************************************

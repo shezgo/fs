@@ -83,12 +83,12 @@ Return:
 typedef struct ppinfo
 {
 	DE * parent; //Pointer to a parent directory array of DEs for the caller of parsePath
-	char * le; //last element for parsePath
+	char le[NAME+1]; //last element for parsePath
 	int lei; //last element index for parsePath - used to access the actual DE as parent[lei]
 	int isFile; //Is 1 if parent[lei] is a file.
 	int parentExists; //Is 1 in case lei is -1, but ppi still contains the parent of the le
 	char pathArray[MAX_ELEMENTS][NAME+1]; //Full path string with . or .. resolved by parsePath
-	int elementCounter;
+	int maxElemIndex; // Used to count the elements in pathArray ie if maxElemIndex is 0, there's 1
 }ppinfo;
 
 // Key directory functions

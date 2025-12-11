@@ -159,6 +159,7 @@ void exitFileSystem()
 {
 	free(vcb);
 	free(rootGlobal);
+	free(cwdName);
 	free(bitmap_bm);
 	free(bm);
 	printf("System exiting\n");
