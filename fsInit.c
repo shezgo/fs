@@ -38,7 +38,7 @@ int initFileSystem(uint64_t numberOfBlocks, uint64_t blockSize)
 	// If the file system has already been mounted,  read in all variables into
 	// memory so they are initialized.
 	// ********************************************************************************************
-/*
+
 	if (vcb->signature == 0x1A)
 	{
 		printf("Loading mounted file system\n");
@@ -88,7 +88,7 @@ int initFileSystem(uint64_t numberOfBlocks, uint64_t blockSize)
 	// ********************************************************************************************
 	// End if file system is already mounted
 	// ********************************************************************************************
-*/
+
 	printf("Mounting file system\n");
 
 	// If the volume hasn't been initialized

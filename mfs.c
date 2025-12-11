@@ -36,13 +36,9 @@ int findNameInDir(DE *parent, char *name)
     }
     int numEntries = parent[0].size / sizeof(DE);
 
-    printf("findNameInDir: sizeof(DE):%ld\n", sizeof(DE));
-    printf("findNameInDir: parent[0].size:%ld\n", parent[0].size);
-    printf("findNameInDir: numEntries:%d\n", numEntries);
-
     for (int i = 0; i < numEntries; i++)
     {
-        printf("findNameInDir: parent[%d].name:%s\n", i, parent[i].name);
+        //printf("findNameInDir: parent[%d].name:%s\n", i, parent[i].name);
         if (strcmp(parent[i].name, name) == 0)
         {
             return i;
@@ -125,12 +121,11 @@ int findUnusedDE(DE *parent)
     }
 
     int numDEs = parent->size / sizeof(DE);
-    printf("from findUnusedDE - parent->size:%ld sizeof(DE):%ld\n", parent->size, sizeof(DE));
-    for (int i = 2; i < numDEs; i++)
+ for (int i = 2; i < numDEs; i++)
     {
         if (parent[i].name[0] == '\0')
         {
-            printf("findUnusedDE index:%d\n", i);
+            //printf("findUnusedDE index:%d\n", i);
             return i;
         }
     }
@@ -194,7 +189,7 @@ int parsePath(char *passedPath, ppinfo *ppi)
         return -1;
     }
     strcpy(path, passedPath); // duplicates string, allocates memory
-    printf("parsePath begin: path: %s\n", path);
+  
     if (path == NULL)
     {
         perror("strcpy failed");
@@ -277,10 +272,7 @@ int parsePath(char *passedPath, ppinfo *ppi)
         {
             fprintf(stderr, "parsePath: relative path but no cwd is initialized.\n");
         }
-        for (int i = 0; i <= ppi->maxElemIndex; i++)
-        {
-            printf("parsePath1:pathArray[%d]:%s\n", i, ppi->pathArray[i]);
-        }
+
     }
 
     DE *parent = start;
@@ -288,7 +280,7 @@ int parsePath(char *passedPath, ppinfo *ppi)
     ppi->parentExists = -1;
 
     char *saveptr;
-    printf("before first strtok_r: path:%s\n", path);
+   
     char *token1 = strtok_r(path, "/", &saveptr);
     // Special case: If the only token is /, then it’ll return null
 
@@ -305,26 +297,23 @@ int parsePath(char *passedPath, ppinfo *ppi)
     }
     ppi->maxElemIndex++;
     strcpy(ppi->pathArray[ppi->maxElemIndex], token1);
-    for (int i = 0; i <= ppi->maxElemIndex; i++)
-    {
-        printf("parsePath2:pathArray[%d]:%s\n", i, ppi->pathArray[i]);
-    }
+
     char *token2;
 
     do
     {
-        printf("parsepath0: token1: %s\n", token1);
+
         ppi->le[0] = '\0';
         strcpy(ppi->le, token1);
-        printf("parsepath1: token1: %s\n", token1);
+
         // if findNameInDir can't find token1, it returns -1 to ppi->lei.
         if (strcmp(token1, "..") == 0)
         {
-            printf("parsePath 1\n");
+
             ppi->lei = 1;
             if (ppi->maxElemIndex >= 2)
             {
-                printf("parsePath 1.5\n");
+  
                 strcpy(ppi->le, ppi->pathArray[ppi->maxElemIndex - 2]);
                 ppi->pathArray[ppi->maxElemIndex][0] = '\0';
                 ppi->pathArray[ppi->maxElemIndex - 1][0] = '\0';
@@ -332,7 +321,7 @@ int parsePath(char *passedPath, ppinfo *ppi)
             }
             else
             {
-                printf("parsePath 2\n");
+   
                 strcpy(ppi->le, "/");
                 ppi->maxElemIndex = 0;
                 ppi->lei = 0;
@@ -342,16 +331,16 @@ int parsePath(char *passedPath, ppinfo *ppi)
         else
         {
 
-            printf("parsepath 3: token1: %s\n", token1);
+ 
             ppi->lei = findNameInDir(parent, token1);
         }
         token2 = strtok_r(NULL, "/", &saveptr);
-        printf("parsepath: token2:%s\n", token2);
+  
         // Success: If token2 is null then token1 is the last element.
         // If token2 is not null, that tells you token1 has to exist and must be a directory.
         if (token2 == NULL)
         {
-            printf("parsePath 4\n");
+
             ppi->parent = parent;
             ppi->parentExists = 1;
             if (entryIsFile(parent, ppi->lei) == 1)
@@ -362,11 +351,11 @@ int parsePath(char *passedPath, ppinfo *ppi)
             }
             if (ppi->lei == -1)
             {
-                printf("parsePath 5\n");
+
                 fprintf(stderr, "parsePath: ppi->lei is -1.\n");
                 return -1;
             }
-            printf("parsepath 6");
+
             return (0);
         }
 
@@ -679,10 +668,7 @@ int fs_setcwd(char *pathname)
     }
 
     int parseFlag = parsePath(pathname, &ppi);
-    for (int i = 0; i <= ppi.maxElemIndex; i++)
-    {
-        printf("fs_setcwd:pathArray[%d]:%s\n", i, ppi.pathArray[i]);
-    }
+
 
     // If parsePath fails, return error
     if (parseFlag == -1)
@@ -1044,8 +1030,6 @@ int fs_rmdir(const char *pathname)
         {
             if (dir[i].name[0] != '\0')
             {
-                printf("ppi.parent[ppi.lei].name: %s\n", ppi.parent[ppi.lei].name);
-                printf("dir[%d].name:%s\n", i, dir[i].name);
                 fprintf(stderr, "Directory is not empty - cannot rmdir.\n");
                 free(dir);
                 return -1;
