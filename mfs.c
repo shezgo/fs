@@ -221,7 +221,7 @@ int parsePath(char *passedPath, ppinfo *ppi)
     else
     {
 
-        // DEBUG: 
+        // DEBUG:
         // Needs to check:
         // 1. if maxElemIndex > MAX_ELEMENTS every time
         // maxElemIndex is incremented.
@@ -322,28 +322,27 @@ int parsePath(char *passedPath, ppinfo *ppi)
         {
             printf("parsePath 1\n");
             ppi->lei = 1;
-            if(ppi->maxElemIndex >=2)
+            if (ppi->maxElemIndex >= 2)
             {
                 printf("parsePath 1.5\n");
                 strcpy(ppi->le, ppi->pathArray[ppi->maxElemIndex - 2]);
                 ppi->pathArray[ppi->maxElemIndex][0] = '\0';
-                ppi->pathArray[ppi->maxElemIndex-1][0] = '\0';
+                ppi->pathArray[ppi->maxElemIndex - 1][0] = '\0';
                 ppi->maxElemIndex = ppi->maxElemIndex - 2;
             }
             else
             {
-                            printf("parsePath 2\n");
+                printf("parsePath 2\n");
                 strcpy(ppi->le, "/");
                 ppi->maxElemIndex = 0;
                 ppi->lei = 0;
             }
-
         }
 
         else
         {
-                   
-                        printf("parsepath 3: token1: %s\n", token1);
+
+            printf("parsepath 3: token1: %s\n", token1);
             ppi->lei = findNameInDir(parent, token1);
         }
         token2 = strtok_r(NULL, "/", &saveptr);
@@ -363,7 +362,7 @@ int parsePath(char *passedPath, ppinfo *ppi)
             }
             if (ppi->lei == -1)
             {
-                            printf("parsePath 5\n");
+                printf("parsePath 5\n");
                 fprintf(stderr, "parsePath: ppi->lei is -1.\n");
                 return -1;
             }
@@ -718,9 +717,22 @@ int fs_setcwd(char *pathname)
             strcpy(cwdName, "/");
             return 0;
         }
-        //Trim the last element from ppi.pathArray? or just let resolvePath handle
-        //PICKUP HERE
-        strcpy(cwdName, cwdGlobal[0].name);
+        // Trim the last element from ppi.pathArray? or just let resolvePath handle
+        // PICKUP HERE
+        // strcpy(cwdName, cwdGlobal[0].name);
+        // return 0;
+
+        char *resolvedPath = resolvePath(ppi.pathArray, ppi.maxElemIndex);
+
+        if (resolvedPath == NULL)
+        {
+            fprintf(stderr, "fs_setcwd: resolvePath failed.\n");
+            return -1;
+        }
+
+        strcpy(cwdName, resolvedPath);
+        free(resolvedPath);
+
         return 0;
     }
 
